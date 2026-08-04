@@ -20,15 +20,15 @@ Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./
 - [x] Video Source Abstraction — MP4 file source (M2)
 - [x] RTSP Stream Manager / Browser Live Streaming (M5)
 - [x] Automatic Reconnection (M5)
+- [x] Recording (M6)
+- [x] Playback (M7)
 
 # In Progress
 
-- [ ] _Nothing yet. Next up: Recording (M6)._
+- [ ] _Nothing yet. Next up: Analytics Pipeline Foundation (M8)._
 
 # Remaining
 
-- [ ] Recording (M6)
-- [ ] Playback (M7)
 - [ ] Analytics Pipeline Foundation — orchestrator, source-independence regression test (M8)
 - [ ] YOLO Integration — Object Detection & Classification (M9)
 - [ ] Object Tracking (ByteTrack, used by M9/M11)

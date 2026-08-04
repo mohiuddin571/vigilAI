@@ -13,8 +13,12 @@ class ListRecordingsUseCase:
     Postconditions: returns every persisted `Recording` matching the filters,
     with no side effects.
 
-    Real logic lands at M7 (docs/TASK_BACKLOG.md T-071); this milestone only
-    establishes the signature and its dependency on the M1 ports.
+    Implemented at M6 (docs/TECHNICAL_DECISIONS.md TD-22) as a thin
+    pass-through to `IRecordingRepository.list()` — needed now because M6's
+    own acceptance criteria require `GET /recordings` to work. Full T-071
+    scope (M7 — e.g. richer filtering/pagination beyond what
+    `IRecordingRepository.list()` already supports) remains M7's job; this is
+    only the minimal slice of the already-M1-fixed signature M6 needs.
     """
 
     def __init__(self, recording_repository: IRecordingRepository) -> None:
@@ -26,4 +30,4 @@ class ListRecordingsUseCase:
         start: datetime | None = None,
         end: datetime | None = None,
     ) -> list[Recording]:
-        raise NotImplementedError
+        return await self._recording_repository.list(camera_id, start, end)

@@ -38,3 +38,11 @@ class FrameSourceUnavailableError(DomainError):
     MP4 file with no camera involved at all (M2's `Mp4FileFrameSource`), so a
     camera-specific exception name would be misleading here.
     """
+
+
+class RecordingNotInProgressError(DomainError):
+    """A stop/observe operation was requested for a camera with no active recording session."""
+
+
+class RecordingNotFoundError(DomainError):
+    """No recording exists for the given identifier, or its segment file is missing from disk."""

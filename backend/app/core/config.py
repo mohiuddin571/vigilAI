@@ -57,5 +57,13 @@ class Settings(BaseSettings):
     # WebSocket stream-status channel poll interval (M5, T-053).
     stream_status_poll_interval_seconds: float = 1.0
 
+    # Recording (M6, T-060; docs/TECHNICAL_DECISIONS.md TD-22). Segment
+    # duration is a production-reasonable default, not fixed by any planning
+    # doc; storage path mirrors FOLDER_STRUCTURE.md's `storage/recordings/`.
+    recording_output_dir: Path = _REPO_ROOT / "storage" / "recordings"
+    recording_segment_duration_seconds: int = 300
+    ffmpeg_binary_path: str = "ffmpeg"
+    ffprobe_binary_path: str = "ffprobe"
+
 
 settings = Settings()  # type: ignore[call-arg]

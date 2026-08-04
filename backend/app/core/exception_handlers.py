@@ -10,6 +10,8 @@ from app.domain.exceptions import (
     CameraUnreachableError,
     DomainError,
     InvalidDomainStateError,
+    RecordingNotFoundError,
+    RecordingNotInProgressError,
     UnsupportedConfigurationError,
 )
 
@@ -27,6 +29,8 @@ _STATUS_BY_EXCEPTION: dict[type[DomainError], int] = {
     CameraUnreachableError: status.HTTP_400_BAD_REQUEST,
     UnsupportedConfigurationError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     InvalidDomainStateError: status.HTTP_422_UNPROCESSABLE_CONTENT,
+    RecordingNotInProgressError: status.HTTP_409_CONFLICT,
+    RecordingNotFoundError: status.HTTP_404_NOT_FOUND,
     DomainError: status.HTTP_400_BAD_REQUEST,
 }
 
