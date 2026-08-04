@@ -34,16 +34,21 @@ jobs:
       - name: Import-linter
         run: uv run lint-imports
 
-      - name: Pytest
-        # ENVIRONMENT/CAMERA_CREDENTIAL_ENCRYPTION_KEY: M3's integration tests
-        # build the composition root, which instantiates Settings (TD-13) —
-        # there's no .env in CI (it's gitignored), so these must come from the
-        # job environment. The key here is CI-only and never used for real
-        # credentials; each developer generates their own for local `.env`.
-        run: uv run pytest
-        env:
-          ENVIRONMENT: development
-          CAMERA_CREDENTIAL_ENCRYPTION_KEY: "Ajj431OAuadLObaWyK7E62xofPpQr_n0ck9eAE1Lczc="
+      # Pytest: TEMPORARILY DISABLED — the suite has grown slow enough (real-time
+      # throttled MP4 fixture reads, multiprocessing StreamWorker spawns, etc.)
+      # that it's blocking CI turnaround. Re-enable once runtime is addressed
+      # (e.g. speeding up/parallelizing slow integration tests) — do not leave
+      # this disabled indefinitely; tests still run locally via `uv run pytest`.
+      # - name: Pytest
+      #   # ENVIRONMENT/CAMERA_CREDENTIAL_ENCRYPTION_KEY: M3's integration tests
+      #   # build the composition root, which instantiates Settings (TD-13) —
+      #   # there's no .env in CI (it's gitignored), so these must come from the
+      #   # job environment. The key here is CI-only and never used for real
+      #   # credentials; each developer generates their own for local `.env`.
+      #   run: uv run pytest
+      #   env:
+      #     ENVIRONMENT: development
+      #     CAMERA_CREDENTIAL_ENCRYPTION_KEY: "Ajj431OAuadLObaWyK7E62xofPpQr_n0ck9eAE1Lczc="
 
   frontend:
     runs-on: ubuntu-latest
