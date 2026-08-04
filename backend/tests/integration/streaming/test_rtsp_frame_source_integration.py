@@ -36,12 +36,16 @@ _FIXTURE_FRAME_SHAPE = (240, 320, 3)
 
 
 def test_rtsp_override_adds_camera_credentials_without_replacing_explicit_ones() -> None:
-    assert _add_rtsp_credentials(
-        "rtsp://public.example:8008/unicaststream/1", "test", "password@123"
-    ) == "rtsp://test:password%40123@public.example:8008/unicaststream/1"
-    assert _add_rtsp_credentials(
-        "rtsp://other:secret@public.example:8008/unicaststream/1", "test", "password"
-    ) == "rtsp://other:secret@public.example:8008/unicaststream/1"
+    assert (
+        _add_rtsp_credentials("rtsp://public.example:8008/unicaststream/1", "test", "password@123")
+        == "rtsp://test:password%40123@public.example:8008/unicaststream/1"
+    )
+    assert (
+        _add_rtsp_credentials(
+            "rtsp://other:secret@public.example:8008/unicaststream/1", "test", "password"
+        )
+        == "rtsp://other:secret@public.example:8008/unicaststream/1"
+    )
 
 
 async def test_raw_rtsp_frame_source_yields_frames_with_the_mp4_frame_source_shape() -> None:

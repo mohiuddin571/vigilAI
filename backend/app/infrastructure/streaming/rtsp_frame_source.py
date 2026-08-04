@@ -214,9 +214,7 @@ class OnvifRtspFrameSource(IFrameSource):
 
     async def _resolve_stream_uri(self) -> str:
         if self._rtsp_url_override is not None:
-            return _add_rtsp_credentials(
-                self._rtsp_url_override, self._username, self._password
-            )
+            return _add_rtsp_credentials(self._rtsp_url_override, self._username, self._password)
         gateway = self._camera_gateway_factory()
         try:
             await gateway.connect(self._ip_address, self._username, self._password, self._port)
