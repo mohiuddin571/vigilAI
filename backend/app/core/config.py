@@ -33,5 +33,13 @@ class Settings(BaseSettings):
     # SQLite for development (TD-09); overridable for a future Postgres path.
     database_url: str = f"sqlite+aiosqlite:///{_DEFAULT_DATABASE_PATH}"
 
+    # Stream Worker reconnect/backoff (M2, T-024; shared by every IFrameSource,
+    # camera or file — docs/ARCHITECTURE.md §6.2). Seconds, applied in order
+    # and held at the last value once exhausted (i.e. capped, not exhausted-and-give-up).
+    stream_worker_reconnect_backoff_seconds: list[float] = [1.0, 2.0, 4.0, 8.0, 16.0, 30.0]
+
+    # Bounded, drop-oldest frame queue size per Stream Worker (M2, T-023).
+    stream_worker_frame_queue_max_size: int = 10
+
 
 settings = Settings()  # type: ignore[call-arg]

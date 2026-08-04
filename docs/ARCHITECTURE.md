@@ -141,10 +141,9 @@ classDiagram
     class IFrameSource {
         <<interface>>
         +source_id: str
-        +open() 
+        +start()
         +frames() AsyncIterator~Frame~
-        +close()
-        +health() SourceHealth
+        +stop()
     }
     class Frame {
         +source_id: str
@@ -156,18 +155,28 @@ classDiagram
     class OnvifRtspFrameSource
     class RawRtspFrameSource
     class Mp4FileFrameSource
+    class IStreamWorker {
+        <<interface>>
+        +start()
+        +frames() AsyncIterator~Frame~
+        +stop()
+        +health() StreamHealth
+    }
 
     IFrameSource <|.. OnvifRtspFrameSource
     IFrameSource <|.. RawRtspFrameSource
     IFrameSource <|.. Mp4FileFrameSource
     IFrameSource ..> Frame : yields
+    IStreamWorker ..> IFrameSource : supervises (any one, via a factory)
+    IStreamWorker ..> Frame : yields
 ```
 
 - `OnvifRtspFrameSource` resolves the RTSP URI via the ONVIF Media service (`GetStreamUri`) once, then delegates actual pixel decoding to the same FFmpeg/OpenCV pipeline `RawRtspFrameSource` uses. **ONVIF is only ever a configuration/control plane — it never touches pixels.**
 - `RawRtspFrameSource` connects directly to a caller-supplied RTSP URL. Exists so the system works against generic RTSP streams that were never ONVIF-onboarded, and so it can be tested independently of `OnvifRtspFrameSource`.
 - `Mp4FileFrameSource` reads a local file via OpenCV `VideoCapture`, optionally looping and optionally throttled to source FPS to simulate a live feed. **This is the primary development and demo path** — it lets analytics be built, tested, and demonstrated before a physical camera is available, and it's what CI runs against.
+- `IStreamWorker` (M2, `docs/TECHNICAL_DECISIONS.md` TD-20) is the port a use case depends on instead of any concrete `IFrameSource` implementation directly — `health()` deliberately lives here, not on `IFrameSource`, because "connecting/reconnecting/failed" is the *supervision* state the Stream Worker adds around a source, not something a bare source (which only knows open/closed) needs to know about itself.
 
-All three emit the same `Frame` domain object. The `AnalyticsOrchestrator` (Application layer) and every detector plugin depend only on `IFrameSource` and `Frame` — they cannot import `onvif_zeep_async`, `cv2.VideoCapture`, or anything RTSP-specific. This boundary is enforced by import-linter rules described in [FOLDER_STRUCTURE.md](./FOLDER_STRUCTURE.md).
+All three `IFrameSource` implementations emit the same `Frame` domain object. The `AnalyticsOrchestrator` (Application layer) and every detector plugin depend only on `IFrameSource` and `Frame` — they cannot import `onvif_zeep_async`, `cv2.VideoCapture`, or anything RTSP-specific. This boundary is enforced by import-linter rules described in [FOLDER_STRUCTURE.md](./FOLDER_STRUCTURE.md).
 
 ---
 
@@ -225,7 +234,7 @@ sequenceDiagram
     WS-->>UI: MJPEG chunk / WS binary frame
 ```
 
-Reconnection is a Stream Worker responsibility, not something each `IFrameSource` implementation re-invents — the supervisor wraps *any* source in the same retry/backoff policy, so MP4 sources (which "reconnect" by re-opening/looping the file) and camera sources (which reconnect over the network) share one implementation.
+Reconnection is a Stream Worker responsibility, not something each `IFrameSource` implementation re-invents — the supervisor wraps *any* source in the same retry/backoff policy, so MP4 sources (which "reconnect" by re-opening/looping the file) and camera sources (which reconnect over the network) share one implementation. Concretely (M2, TD-20): `ReconnectSupervisor` is the source-agnostic open→consume→backoff→retry loop itself (no process knowledge, unit-testable against a fake flaky `IFrameSource`), and `StreamWorker` (implements the `IStreamWorker` port) runs one inside the isolated process shown above, bridging frames/health back to the API process via the two bounded, drop-oldest queues.
 
 ### 6.3 Recording & Playback
 

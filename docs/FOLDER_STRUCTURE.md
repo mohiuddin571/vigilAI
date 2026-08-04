@@ -75,8 +75,8 @@ vigilAI/
 ### `backend/app/domain/`
 **Owns**: business entities and rules with zero framework knowledge.
 **Contains**:
-- `entities/` — `Camera`, `StreamProfile`, `Recording`, `DetectionEvent`, `AnalyticsZone`, `TrackedObject`.
-- `value_objects/` — `Resolution`, `Codec`, `BitrateKbps`, `PlateNumber`, `ColorLabel`, `BoundingBox`.
+- `entities/` — `Camera`, `StreamProfile`, `Recording`, `DetectionEvent`, `AnalyticsZone`, `TrackedObject`, `Frame` (M2 — the `IFrameSource`/`IStreamWorker` payload type).
+- `value_objects/` — `Resolution`, `Codec`, `BitrateKbps`, `PlateNumber`, `ColorLabel`, `BoundingBox`, `StreamHealth`/`StreamState` (M2 — a Stream Worker's point-in-time health snapshot).
 - `events/` — domain events (`CameraWentOffline`, `LoiteringDetected`, `RecordingCompleted`).
 - `exceptions.py` — domain-level exception types (`CameraUnreachableError`, `UnsupportedConfigurationError`).
 **Dependencies**: none within the project. May use Python stdlib and `pydantic` (for validation-rich value objects) but never `fastapi`, `cv2`, `onvif_zeep_async`, `sqlalchemy`.
@@ -85,8 +85,8 @@ vigilAI/
 ### `backend/app/application/`
 **Owns**: orchestration of domain objects to fulfill a use case, and the contracts (ports) infrastructure must satisfy.
 **Contains**:
-- `ports/` — abstract base classes: `ICameraGateway`, `IFrameSource`, `IRecordingRepository`, `IObjectDetector`, `ILicensePlateReader`, `IEventPublisher`, `ICameraRepository`.
-- `use_cases/` — one class per business operation: `OnboardCameraUseCase`, `UpdateCameraConfigUseCase`, `StartLiveStreamUseCase`, `StartRecordingUseCase`, `ListRecordingsUseCase`, `RunAnalyticsPipelineUseCase`, `ConfigureAnalyticsRuleUseCase`.
+- `ports/` — abstract base classes: `ICameraGateway`, `IFrameSource`, `IStreamWorker` (M2 — the Stream Worker abstraction a use case depends on instead of a concrete `StreamWorker` class), `IRecordingRepository`, `IObjectDetector`, `ILicensePlateReader`, `IEventPublisher`, `ICameraRepository`.
+- `use_cases/` — one class per business operation: `OnboardCameraUseCase`, `UpdateCameraConfigUseCase`, `StartLiveStreamUseCase`, `StartRecordingUseCase`, `ListRecordingsUseCase`, `RunAnalyticsPipelineUseCase`, `ConfigureAnalyticsRuleUseCase`. Plus `DebugStreamUseCase` (M2, T-025) — dev/demo tooling proving the Stream Worker end-to-end, not a persisted business operation like the others.
 - `dto/` — plain dataclasses/Pydantic models passed between interfaces and use cases (not the same as domain entities, and not the same as API schemas — this is the use-case-facing shape).
 **Dependencies**: `domain/` only.
 **Who touches this**: anyone adding or changing a business operation. A new use case is the right place to start most feature work.
@@ -95,7 +95,7 @@ vigilAI/
 **Owns**: every concrete integration with the outside world.
 **Contains**:
 - `onvif/` — `OnvifCameraGateway` (implements `ICameraGateway`) wrapping `onvif-zeep-async`: auth, `GetDeviceInformation`, `GetProfiles`, encoder config read/update, `GetStreamUri`.
-- `streaming/` — `OnvifRtspFrameSource`, `RawRtspFrameSource`, `Mp4FileFrameSource` (all implement `IFrameSource`); FFmpeg process wrappers for recording and preview transcoding; the Stream Worker supervisor (reconnect/backoff logic).
+- `streaming/` — `OnvifRtspFrameSource`, `RawRtspFrameSource`, `Mp4FileFrameSource` (all implement `IFrameSource`); FFmpeg process wrappers for recording and preview transcoding; `ReconnectSupervisor` (source-agnostic reconnect/backoff loop, M2) and `StreamWorker` (implements `IStreamWorker`, runs a `ReconnectSupervisor` in an isolated process — see `docs/TECHNICAL_DECISIONS.md` TD-20 for why these are two classes).
 - `analytics/` — detector plugins implementing `IObjectDetector`/plugin interfaces: `YoloObjectDetector`, `ColorDetector`, `LoiteringDetector`, `MissingObjectDetector`, `LicensePlateRecognizer` (composes a plate localizer + `EasyOcrReader`); the `AnalyticsOrchestrator`.
 - `persistence/` — SQLModel table models, repository implementations (`SqlCameraRepository`, `SqlRecordingRepository`, `SqlEventRepository`), migrations.
 - `messaging/` — in-process asyncio event bus implementing `IEventPublisher`/subscriber-side fan-out to WebSocket connections.

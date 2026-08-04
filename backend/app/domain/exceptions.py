@@ -29,3 +29,12 @@ class CameraNotFoundError(DomainError):
 
 class UnsupportedConfigurationError(DomainError):
     """A requested camera configuration change is not supported by the camera."""
+
+
+class FrameSourceUnavailableError(DomainError):
+    """An `IFrameSource` could not be opened or stopped producing frames.
+
+    Deliberately not `CameraUnreachableError`: a frame source can be a local
+    MP4 file with no camera involved at all (M2's `Mp4FileFrameSource`), so a
+    camera-specific exception name would be misleading here.
+    """
