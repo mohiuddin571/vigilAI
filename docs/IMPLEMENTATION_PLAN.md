@@ -70,7 +70,7 @@ Each milestone lists **Goal**, **Deliverables**, **Files** (primary ones touched
 - A minimal FastAPI endpoint to start a local-file "stream" and confirm frames are flowing (via a debug endpoint or log output — full live-view UI comes in M5).
 - Integration tests using a committed sample MP4 fixture.
 
-**Files**: `backend/app/domain/entities/frame.py` (or under value_objects, per final layout), `backend/app/infrastructure/streaming/mp4_frame_source.py`, `backend/app/infrastructure/streaming/stream_worker.py`, `backend/tests/fixtures/sample.mp4`, `backend/tests/integration/streaming/**`.
+**Files**: `backend/app/domain/entities/frame.py`, `backend/app/infrastructure/streaming/mp4_frame_source.py`, `backend/app/infrastructure/streaming/reconnect_supervisor.py`, `backend/app/infrastructure/streaming/stream_worker.py`, `backend/app/application/ports/stream_worker.py` (new `IStreamWorker` port), `backend/tests/fixtures/sample.mp4`, `backend/tests/integration/streaming/**`. See `docs/TECHNICAL_DECISIONS.md` TD-20 for why the reconnect loop and the process-isolation wrapper are two separate classes, and for a known limitation of the committed fixture.
 
 **Acceptance Criteria**:
 - Given the fixture MP4, the Stream Worker produces `Frame`s at the expected rate in a separate process, observable via a debug endpoint.

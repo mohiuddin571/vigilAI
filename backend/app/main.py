@@ -9,6 +9,7 @@ from app.core.container import Container
 from app.core.exception_handlers import register_exception_handlers
 from app.core.logging import configure_logging
 from app.interfaces.api.cameras import create_cameras_router
+from app.interfaces.api.stream_debug import create_stream_debug_router
 
 configure_logging()
 
@@ -41,6 +42,7 @@ app.include_router(
         build_update_camera_config_use_case=container.build_update_camera_config_use_case,
     )
 )
+app.include_router(create_stream_debug_router(container.build_debug_stream_use_case()))
 
 
 @app.get("/health")

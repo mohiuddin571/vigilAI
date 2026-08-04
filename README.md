@@ -4,7 +4,7 @@ A Video Management System (VMS) with integrated video analytics: ONVIF camera on
 
 Built as a production-quality prototype demonstrating Clean Architecture applied to a real-time video/AI system.
 
-> **Status**: 🚧 M0 (Project Scaffolding & Tooling), M1 (Domain & Application Core), and M3 (ONVIF Camera Onboarding) complete — M3 landed ahead of M2 since it's independent of it (see `docs/IMPLEMENTATION_PLAN.md` §M3 "Dependencies"). Next up: M2 (Frame Source Abstraction). See [Project State](./docs/AI_PROJECT_CONTEXT.md#9-project-state).
+> **Status**: 🚧 M0 (Project Scaffolding & Tooling), M1 (Domain & Application Core), M3 (ONVIF Camera Onboarding), M4 (ONVIF Configuration), and M2 (Frame Source Abstraction) complete. Next up: M5 (Live Streaming + Auto-Reconnect). See [Project State](./docs/AI_PROJECT_CONTEXT.md#9-project-state).
 
 ---
 
@@ -67,7 +67,7 @@ Full reasoning for every choice, including tradeoffs and rejected alternatives: 
 
 ## Getting Started
 
-The current milestone (M0/M1) is a backend health check and a frontend page that displays it — there's no camera/video functionality to run yet (that starts at M2). These steps get that running.
+These steps get the backend and frontend running. Camera onboarding/configuration (M3/M4) needs a real or simulated ONVIF camera to do anything beyond what's below; the local MP4 debug stream (M2, Step 6) needs no camera at all.
 
 ### Step 1 — One-time machine setup
 
@@ -78,7 +78,7 @@ Skip anything you already have installed.
 | Git | `git --version` | `brew install git` |
 | [`uv`](https://docs.astral.sh/uv/) (Python 3.12 + backend deps) | `uv --version` | `brew install uv` |
 | Node.js 22.12+ (frontend) | `node --version` | `brew install nvm` then `nvm install --lts && nvm use --lts` |
-| FFmpeg | `ffmpeg -version` | `brew install ffmpeg` — **not needed yet**, only from M2/M5 onward |
+| FFmpeg | `ffmpeg -version` | `brew install ffmpeg` — **not needed yet**, only from M5 onward (M2's `Mp4FileFrameSource` uses OpenCV only; FFmpeg is TD-04's choice for RTSP ingestion/recording) |
 
 `uv` and `nvm` manage their own tool versions per-project, so you don't need to separately install Python or pin a global Node version.
 
@@ -136,6 +136,20 @@ npm run dev
 
 Leave this terminal running too. Open **http://localhost:5173** in your browser — you should see a "VigilAI" card reading "Backend: ok". The frontend proxies `/health` to the backend on port 8000, so the backend must already be running (Step 4) for this to show `ok` instead of an error.
 
+### Step 6 — Run the local MP4 debug stream (no camera needed)
+
+With the backend running (Step 4), this exercises the M2 Stream Worker end to end against the committed sample fixture (`backend/tests/fixtures/sample.mp4`) — no ONVIF camera involved:
+
+```bash
+curl -X POST http://localhost:8000/debug/streams/mp4/start
+curl http://localhost:8000/debug/streams/mp4/status   # state, and the latest frame's metadata
+curl -X POST http://localhost:8000/debug/streams/mp4/stop
+```
+
+`status` should move from `"connecting"` to `"connected"`, with `latest_frame.sequence` increasing on repeated calls at roughly the fixture's frame rate. This is dev/demo tooling proving the frame source + reconnect-supervised Stream Worker work (T-025) — it's not the real browser live-view, which lands with M5 (MJPEG-over-HTTP against a resolved camera stream).
+
+Note: `backend/tests/fixtures/sample.mp4` is a synthetically generated clip (`scripts/generate_sample_fixture.py`), not real footage — see [TECHNICAL_DECISIONS.md](./docs/TECHNICAL_DECISIONS.md) TD-20 for why, and for the known limitation this leaves for later analytics milestones (M9+).
+
 ### Stopping the app
 
 Press `Ctrl+C` in each terminal (backend and frontend) to stop them. If you started them in the background instead and lost track of them:
@@ -145,10 +159,6 @@ lsof -i :8000   # find the backend process
 lsof -i :5173   # find the frontend process
 kill <PID>      # PID is in the second column of the lsof output
 ```
-
-### Running Without a Camera
-
-VigilAI is designed to be fully demonstrable without physical hardware: point a source at a local MP4 file and the entire analytics pipeline runs identically to how it would against a live camera. Instructions land with M2 — see [IMPLEMENTATION_PLAN.md](./docs/IMPLEMENTATION_PLAN.md#m2--frame-source-abstraction--mp4-file-adapter).
 
 ---
 
