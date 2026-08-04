@@ -26,16 +26,21 @@ from uuid import UUID
 
 from app.application.ports.camera_gateway import ICameraGateway
 from app.application.ports.camera_repository import ICameraRepository
+from app.application.ports.event_repository import IEventRepository
+from app.application.ports.frame_source import IFrameSource
 from app.application.ports.recording_repository import IRecordingRepository
 from app.application.ports.recording_worker import IRecordingWorker
+from app.application.use_cases.analytics_session_registry import AnalyticsSessionRegistry
 from app.application.use_cases.debug_stream import DebugStreamUseCase
 from app.application.use_cases.get_camera import GetCameraUseCase
 from app.application.use_cases.get_camera_config import GetCameraConfigUseCase
 from app.application.use_cases.get_recording import GetRecordingUseCase
 from app.application.use_cases.list_cameras import ListCamerasUseCase
+from app.application.use_cases.list_detection_events import ListDetectionEventsUseCase
 from app.application.use_cases.list_recordings import ListRecordingsUseCase
 from app.application.use_cases.onboard_camera import OnboardCameraUseCase
 from app.application.use_cases.recording_session_registry import RecordingSessionRegistry
+from app.application.use_cases.run_analytics_pipeline import RunAnalyticsPipelineUseCase
 from app.application.use_cases.start_live_stream import StartLiveStreamUseCase
 from app.application.use_cases.start_recording import StartRecordingUseCase
 from app.application.use_cases.stop_recording import StopRecordingUseCase
@@ -44,8 +49,13 @@ from app.application.use_cases.update_camera_rtsp_override import UpdateCameraRt
 from app.core.config import Settings
 from app.domain.entities.camera import Camera
 from app.domain.entities.stream_profile import StreamProfile
+from app.domain.exceptions import UnsupportedConfigurationError
+from app.infrastructure.analytics.noop_plugin import NoOpDetectorPlugin
+from app.infrastructure.analytics.orchestrator import AnalyticsOrchestrator
+from app.infrastructure.messaging.event_bus import EventBus
 from app.infrastructure.onvif.onvif_camera_gateway import OnvifCameraGateway
 from app.infrastructure.persistence.database import build_engine, build_session_factory, init_db
+from app.infrastructure.persistence.event_repository import SqlEventRepository
 from app.infrastructure.persistence.recording_repository import SqlRecordingRepository
 from app.infrastructure.persistence.sql_camera_repository import SqlCameraRepository
 from app.infrastructure.security.credential_cipher import CredentialCipher
@@ -53,9 +63,12 @@ from app.infrastructure.streaming.mp4_frame_source import Mp4FileFrameSource
 from app.infrastructure.streaming.recording_worker import FfmpegRecordingWorker
 from app.infrastructure.streaming.rtsp_frame_source import OnvifRtspFrameSource
 from app.infrastructure.streaming.stream_worker import StreamWorker
+from app.infrastructure.streaming.supervised_frame_source import SupervisedFrameSource
+from app.interfaces.websocket.analytics_events import AnalyticsEventsHub
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEBUG_MP4_FIXTURE_PATH = _REPO_ROOT / "backend" / "tests" / "fixtures" / "sample.mp4"
+_ANALYTICS_MP4_SOURCE_ID = "mp4-demo"
 
 
 class Container:
@@ -71,6 +84,15 @@ class Container:
         )
         self._recording_repository: IRecordingRepository = SqlRecordingRepository(
             self._session_factory
+        )
+        self._event_repository: IEventRepository = SqlEventRepository(self._session_factory)
+        self._event_bus = EventBus()
+        self._analytics_events_hub = AnalyticsEventsHub()
+        self._event_bus.subscribe(self._event_repository.add)
+        self._event_bus.subscribe(self._analytics_events_hub.broadcast)
+        self._analytics_orchestrator = AnalyticsOrchestrator([NoOpDetectorPlugin()])
+        self._analytics_session_registry = AnalyticsSessionRegistry(
+            build_use_case=self._build_analytics_use_case
         )
         self._debug_stream_use_case = DebugStreamUseCase(
             build_worker=self._build_debug_stream_worker
@@ -227,3 +249,42 @@ class Container:
         once), so the same instance must be returned every call.
         """
         return self._debug_stream_use_case
+
+    def _build_analytics_frame_source(self, source_id: str) -> IFrameSource:
+        # Only one analytics-enableable source exists in M8 (the MP4 demo
+        # fixture) — M8 explicitly does not depend on M3-M7's ONVIF/camera
+        # machinery (docs/IMPLEMENTATION_PLAN.md's Milestone Dependency
+        # Graph). Wrapped in `SupervisedFrameSource` so consumption goes
+        # through the same `ReconnectSupervisor` reconnect/backoff path M5's
+        # live-view and M6's recording already build on, per
+        # docs/IMPLEMENTATION_PLAN.md §M8's Constraints.
+        if source_id != _ANALYTICS_MP4_SOURCE_ID:
+            raise UnsupportedConfigurationError(
+                f"No analytics-enableable source {source_id!r}"
+                f" (only {_ANALYTICS_MP4_SOURCE_ID!r} exists in this milestone)"
+            )
+        return SupervisedFrameSource(
+            Mp4FileFrameSource(file_path=str(_DEBUG_MP4_FIXTURE_PATH), source_id=source_id),
+            backoff_schedule=self._settings.stream_worker_reconnect_backoff_seconds,
+        )
+
+    def _build_analytics_use_case(self, source_id: str) -> RunAnalyticsPipelineUseCase:
+        return RunAnalyticsPipelineUseCase(
+            frame_source=self._build_analytics_frame_source(source_id),
+            process_frame=self._analytics_orchestrator.process,
+            event_publisher=self._event_bus,
+        )
+
+    def build_analytics_session_registry(self) -> AnalyticsSessionRegistry:
+        """Returns the single shared `AnalyticsSessionRegistry` instance (T-085).
+
+        Like `build_start_live_stream_use_case`, must be a singleton: it
+        holds running analytics sessions keyed by `source_id` across requests.
+        """
+        return self._analytics_session_registry
+
+    def build_list_detection_events_use_case(self) -> ListDetectionEventsUseCase:
+        return ListDetectionEventsUseCase(self._event_repository)
+
+    def build_analytics_events_hub(self) -> AnalyticsEventsHub:
+        return self._analytics_events_hub

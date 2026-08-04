@@ -53,7 +53,7 @@
 Clean Architecture, four layers, strict inward dependency direction:
 
 1. **Domain** — pure business entities/rules, no framework imports.
-2. **Application** — use cases + **ports** (abstract interfaces like `IFrameSource`, `ICameraGateway`, `IObjectDetector`, `IRecordingRepository`).
+2. **Application** — use cases + **ports** (abstract interfaces like `IFrameSource`, `ICameraGateway`, `IDetectorPlugin`, `IRecordingRepository`).
 3. **Infrastructure** — concrete adapters implementing ports: ONVIF client, FFmpeg/OpenCV frame sources, YOLO/EasyOCR detectors, SQL persistence.
 4. **Interfaces** — FastAPI routers + WebSocket hub translating HTTP/WS to use-case calls.
 
@@ -132,9 +132,9 @@ If a future prompt seems to ask for one of these, confirm scope before building 
 
 > Update this section as work progresses. Future AI sessions should read this before assuming anything about what exists.
 
-- **Current milestone**: M0–M7 complete (scaffolding, domain/application core, frame source abstraction, ONVIF onboarding/config, live streaming + auto-reconnect, recording, playback). See [TASKS.md](../TASKS.md) for the live checklist — this section is a coarser summary and can lag it briefly.
-- **What exists**: The full documentation set, plus a working backend (`backend/app/`) and frontend (`frontend/src/`) implementing M0–M7's deliverables — camera onboarding/config over ONVIF, the `IFrameSource`/`IStreamWorker` abstractions, MP4 and RTSP frame sources, browser live view (MJPEG + WS status) with automatic reconnect, FFmpeg stream-copy recording to MP4 segments (`IRecordingWorker`, `SqlRecordingRepository`, start/stop/list API), and HTTP range-request playback of recorded segments with a filterable recordings browser + native `<video>` player in the frontend — see TECHNICAL_DECISIONS.md TD-22/TD-23.
-- **What's next**: Milestone M8 (Analytics Pipeline Foundation) per [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md).
+- **Current milestone**: M0–M8 complete (scaffolding, domain/application core, frame source abstraction, ONVIF onboarding/config, live streaming + auto-reconnect, recording, playback, analytics pipeline foundation). See [TASKS.md](../TASKS.md) for the live checklist — this section is a coarser summary and can lag it briefly.
+- **What exists**: The full documentation set, plus a working backend (`backend/app/`) and frontend (`frontend/src/`) implementing M0–M8's deliverables — camera onboarding/config over ONVIF, the `IFrameSource`/`IStreamWorker` abstractions, MP4 and RTSP frame sources, browser live view (MJPEG + WS status) with automatic reconnect, FFmpeg stream-copy recording to MP4 segments (`IRecordingWorker`, `SqlRecordingRepository`, start/stop/list API), HTTP range-request playback of recorded segments with a filterable recordings browser + native `<video>` player in the frontend, and the `IDetectorPlugin`/`AnalyticsOrchestrator`/`EventBus`/`SqlEventRepository`/analytics WebSocket channel/per-source enable-disable API proving analytics runs identically regardless of frame source (the permanent T-086 regression test) — see TECHNICAL_DECISIONS.md TD-22/TD-23/TD-24.
+- **What's next**: Milestone M9 (YOLO Integration — Object Detection & Classification) per [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md).
 - **Known open questions**: exact make/model of the evaluator-provided ONVIF camera is unknown until evaluation day — onboarding/config-read/config-update code should be validated against ONVIF's spec plus a mock/test camera or camera simulator, not assumptions about one vendor's quirks.
 
 ---

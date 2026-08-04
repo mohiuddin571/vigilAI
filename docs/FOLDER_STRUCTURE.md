@@ -85,7 +85,7 @@ vigilAI/
 ### `backend/app/application/`
 **Owns**: orchestration of domain objects to fulfill a use case, and the contracts (ports) infrastructure must satisfy.
 **Contains**:
-- `ports/` — abstract base classes: `ICameraGateway`, `IFrameSource`, `IStreamWorker` (M2 — the Stream Worker abstraction a use case depends on instead of a concrete `StreamWorker` class), `IRecordingRepository`, `IObjectDetector`, `ILicensePlateReader`, `IEventPublisher`, `ICameraRepository`.
+- `ports/` — abstract base classes: `ICameraGateway`, `IFrameSource`, `IStreamWorker` (M2 — the Stream Worker abstraction a use case depends on instead of a concrete `StreamWorker` class), `IRecordingRepository`, `IDetectorPlugin` (M8 — supersedes the M1 `IObjectDetector`, retired; see `docs/TECHNICAL_DECISIONS.md` TD-24), `IEventRepository` (M8), `ILicensePlateReader`, `IEventPublisher`, `ICameraRepository`.
 - `use_cases/` — one class per business operation: `OnboardCameraUseCase`, `UpdateCameraConfigUseCase`, `StartLiveStreamUseCase`, `StartRecordingUseCase`, `ListRecordingsUseCase`, `RunAnalyticsPipelineUseCase`, `ConfigureAnalyticsRuleUseCase`. Plus `DebugStreamUseCase` (M2, T-025) — dev/demo tooling proving the Stream Worker end-to-end, not a persisted business operation like the others.
 - `dto/` — plain dataclasses/Pydantic models passed between interfaces and use cases (not the same as domain entities, and not the same as API schemas — this is the use-case-facing shape).
 **Dependencies**: `domain/` only.
@@ -96,9 +96,9 @@ vigilAI/
 **Contains**:
 - `onvif/` — `OnvifCameraGateway` (implements `ICameraGateway`) wrapping `onvif-zeep-async`: auth, `GetDeviceInformation`, `GetProfiles`, encoder config read/update, `GetStreamUri`.
 - `streaming/` — `OnvifRtspFrameSource`, `RawRtspFrameSource`, `Mp4FileFrameSource` (all implement `IFrameSource`); FFmpeg process wrappers for recording and preview transcoding; `ReconnectSupervisor` (source-agnostic reconnect/backoff loop, M2) and `StreamWorker` (implements `IStreamWorker`, runs a `ReconnectSupervisor` in an isolated process — see `docs/TECHNICAL_DECISIONS.md` TD-20 for why these are two classes).
-- `analytics/` — detector plugins implementing `IObjectDetector`/plugin interfaces: `YoloObjectDetector`, `ColorDetector`, `LoiteringDetector`, `MissingObjectDetector`, `LicensePlateRecognizer` (composes a plate localizer + `EasyOcrReader`); the `AnalyticsOrchestrator`.
+- `analytics/` — detector plugins implementing `IDetectorPlugin`: `NoOpDetectorPlugin` (M8, proves orchestrator wiring), `YoloObjectDetector`, `ColorDetector`, `LoiteringDetector`, `MissingObjectDetector`, `LicensePlateRecognizer` (composes a plate localizer + `EasyOcrReader`); the `AnalyticsOrchestrator`.
 - `persistence/` — SQLModel table models, repository implementations (`SqlCameraRepository`, `SqlRecordingRepository`, `SqlEventRepository`), migrations.
-- `messaging/` — in-process asyncio event bus implementing `IEventPublisher`/subscriber-side fan-out to WebSocket connections.
+- `messaging/` — in-process asyncio `EventBus` implementing `IEventPublisher` (M8, TD-11/TD-24)/subscriber-side fan-out to WebSocket connections.
 **Dependencies**: `application/` (to implement its ports) and `domain/` (to construct/return entities). Infrastructure modules never import each other across subfolders except through ports (e.g. `analytics/` must not import `streaming/` directly — it receives `Frame` objects, it doesn't know how they were produced).
 **Who touches this**: anyone integrating a new library, protocol, or storage backend.
 

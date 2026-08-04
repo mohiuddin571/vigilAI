@@ -4,7 +4,7 @@ A Video Management System (VMS) with integrated video analytics: ONVIF camera on
 
 Built as a production-quality prototype demonstrating Clean Architecture applied to a real-time video/AI system.
 
-> **Status**: 🚧 M0 (Project Scaffolding & Tooling), M1 (Domain & Application Core), M2 (Frame Source Abstraction), M3 (ONVIF Camera Onboarding), M4 (ONVIF Configuration), M5 (Live Streaming + Auto-Reconnect), M6 (Recording), and M7 (Playback) complete. Next up: M8 (Analytics Pipeline Foundation). See [Project State](./docs/AI_PROJECT_CONTEXT.md#9-project-state).
+> **Status**: 🚧 M0 (Project Scaffolding & Tooling), M1 (Domain & Application Core), M2 (Frame Source Abstraction), M3 (ONVIF Camera Onboarding), M4 (ONVIF Configuration), M5 (Live Streaming + Auto-Reconnect), M6 (Recording), M7 (Playback), and M8 (Analytics Pipeline Foundation) complete. Next up: M9 (YOLO Integration). See [Project State](./docs/AI_PROJECT_CONTEXT.md#9-project-state).
 
 ---
 

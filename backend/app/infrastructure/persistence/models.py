@@ -44,3 +44,23 @@ class RecordingRow(SQLModel, table=True):
     started_at: datetime
     ended_at: datetime | None = None
     size_bytes: int | None = None
+
+
+class DetectionEventRow(SQLModel, table=True):
+    """SQL row shape for one analytics finding (TD-09, M8/TD-24).
+
+    `bounding_box_json`/`metadata_json` are JSON-encoded (mirrors
+    `CameraRow.stream_profiles_json`) — `DetectionEvent.metadata` is an
+    open-ended `dict[str, Any]` bag by design (M1), so a normalized column
+    set would be speculative ahead of M9+'s real detector plugins.
+    """
+
+    __tablename__ = "detection_event"
+
+    id: str = Field(primary_key=True)
+    camera_id: str = Field(index=True)
+    event_type: str = Field(index=True)
+    occurred_at: datetime
+    confidence: float
+    bounding_box_json: str | None = None
+    metadata_json: str = "{}"

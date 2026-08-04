@@ -25,7 +25,7 @@ flowchart TB
 ```
 
 - **Domain** — pure Python. `Camera`, `StreamProfile`, `Recording`, `DetectionEvent`, `AnalyticsZone`. No imports from FastAPI, OpenCV, ONVIF libraries, or SQLAlchemy. Fully unit-testable with no mocks required.
-- **Application** — use cases (`OnboardCameraUseCase`, `StartRecordingUseCase`, `RunAnalyticsPipelineUseCase`) and **ports**: abstract interfaces (`ICameraGateway`, `IFrameSource`, `IRecordingRepository`, `IObjectDetector`, `IEventPublisher`) that outer layers must implement. This is the layer that makes the rest of the system swappable.
+- **Application** — use cases (`OnboardCameraUseCase`, `StartRecordingUseCase`, `RunAnalyticsPipelineUseCase`) and **ports**: abstract interfaces (`ICameraGateway`, `IFrameSource`, `IRecordingRepository`, `IDetectorPlugin`, `IEventPublisher`) that outer layers must implement. This is the layer that makes the rest of the system swappable.
 - **Infrastructure** — concrete adapters: ONVIF client (device auth, media profiles), FFmpeg/OpenCV frame readers, Ultralytics YOLO detector, SQL repositories, filesystem recording storage. Infrastructure implements Application's ports; it never defines new business rules.
 - **Interfaces** — FastAPI routers, WebSocket endpoints, Pydantic request/response schemas. Translates HTTP/WS traffic into use-case calls and use-case results back into JSON/binary frames.
 
@@ -100,15 +100,17 @@ flowchart LR
 | **WebSocket Hub** | Push live frames (MJPEG/binary) and analytics events to subscribed clients | Application use cases, Event Bus |
 | **Composition Root (DI container)** | Builds concrete adapters and injects them behind ports at startup; the *only* place concrete infra classes and abstract ports are both known | Everything (by design — it's the wiring layer) |
 | **Use Cases** | Orchestrate a single business operation (e.g. "onboard a camera", "start recording") | Ports only |
-| **Ports** | Abstract contracts (`IFrameSource`, `ICameraGateway`, `IObjectDetector`, `IRecordingRepository`, `IEventPublisher`) | Nothing (pure interfaces) |
+| **Ports** | Abstract contracts (`IFrameSource`, `ICameraGateway`, `IDetectorPlugin`, `IRecordingRepository`, `IEventPublisher`) | Nothing (pure interfaces) |
 | **Stream Worker** | Owns the lifecycle of one video source: connect, read frames, detect disconnect, reconnect with backoff, publish frames to a bounded queue | `IFrameSource` implementation |
 | **Recording Worker** | Segments incoming stream to disk as MP4, writes recording metadata | FFmpeg, `IRecordingRepository` |
-| **Analytics Worker** | Pulls frames from a Stream Worker's queue, runs the enabled detector plugins, emits `DetectionEvent`s | `IObjectDetector` implementations, Event Bus |
+| **Analytics Worker** | Pulls frames from a Stream Worker's queue, runs the enabled detector plugins, emits `DetectionEvent`s | `IDetectorPlugin` implementations, Event Bus |
 | **ONVIF Client** | WS-UsernameToken auth, `GetDeviceInformation`, `GetProfiles`, `GetVideoEncoderConfiguration(s)`, `SetVideoEncoderConfiguration`, `GetStreamUri` | `onvif-zeep-async`, camera network |
 | **FFmpeg Processes** | RTSP ingestion, segment-based recording (stream copy), on-demand transcoding for browser preview | `ffmpeg` binary via subprocess |
 | **YOLO Detector** | Object detection, classification, and (with tracking) the position data loitering detection needs | `ultralytics` |
 | **EasyOCR** | Plate text extraction for LPR, after a plate-region detector crops candidates | `easyocr` |
 | **Persistence** | Camera configs, recording index, detection events, analytics rules | SQLModel/SQLAlchemy |
+
+As of M8, the Analytics Worker runs in-process (via `SupervisedFrameSource` wrapping the same `ReconnectSupervisor` reconnect/backoff loop `StreamWorker` uses, not a separate `multiprocessing.Process`) — process isolation is deferred until a real, CPU-bound detector plugin (M9+) actually needs it; see `docs/TECHNICAL_DECISIONS.md` TD-24.
 
 ---
 
@@ -176,7 +178,7 @@ classDiagram
 - `Mp4FileFrameSource` reads a local file via OpenCV `VideoCapture`, optionally looping and optionally throttled to source FPS to simulate a live feed. **This is the primary development and demo path** — it lets analytics be built, tested, and demonstrated before a physical camera is available, and it's what CI runs against.
 - `IStreamWorker` (M2, `docs/TECHNICAL_DECISIONS.md` TD-20) is the port a use case depends on instead of any concrete `IFrameSource` implementation directly — `health()` deliberately lives here, not on `IFrameSource`, because "connecting/reconnecting/failed" is the *supervision* state the Stream Worker adds around a source, not something a bare source (which only knows open/closed) needs to know about itself.
 
-All three `IFrameSource` implementations emit the same `Frame` domain object. The `AnalyticsOrchestrator` (Application layer) and every detector plugin depend only on `IFrameSource` and `Frame` — they cannot import `onvif_zeep_async`, `cv2.VideoCapture`, or anything RTSP-specific. This boundary is enforced by import-linter rules described in [FOLDER_STRUCTURE.md](./FOLDER_STRUCTURE.md).
+All three `IFrameSource` implementations emit the same `Frame` domain object. The `AnalyticsOrchestrator` (Infrastructure layer, per `docs/FOLDER_STRUCTURE.md`'s `infrastructure/analytics/` — it composes `IDetectorPlugin` implementations, so `RunAnalyticsPipelineUseCase` (Application layer) depends on it only via an injected callable, never a direct import; see `docs/TECHNICAL_DECISIONS.md` TD-24) and every detector plugin depend only on `IFrameSource`/`IDetectorPlugin` and `Frame` — they cannot import `onvif_zeep_async`, `cv2.VideoCapture`, or anything RTSP-specific. This boundary is enforced by import-linter rules described in [FOLDER_STRUCTURE.md](./FOLDER_STRUCTURE.md).
 
 ---
 
