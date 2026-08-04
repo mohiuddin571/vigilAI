@@ -1,0 +1,27 @@
+# Environment
+.env
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+frontend/dist/
+npm-debug.log*
+
+# Storage (recordings, model weights — gitignored per FOLDER_STRUCTURE.md)
+storage/recordings/
+storage/models/
+
+# Editors
+.vscode/
+.idea/
