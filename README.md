@@ -4,7 +4,7 @@ A Video Management System (VMS) with integrated video analytics: ONVIF camera on
 
 Built as a production-quality prototype demonstrating Clean Architecture applied to a real-time video/AI system.
 
-> **Status**: 🚧 Planning complete, implementation not yet started. See [Project State](./docs/AI_PROJECT_CONTEXT.md#9-project-state).
+> **Status**: 🚧 M0 (Project Scaffolding & Tooling) and M1 (Domain & Application Core) complete. Next up: M2 (Frame Source Abstraction). See [Project State](./docs/AI_PROJECT_CONTEXT.md#9-project-state).
 
 ---
 
@@ -67,36 +67,36 @@ Full reasoning for every choice, including tradeoffs and rejected alternatives: 
 
 ## Getting Started
 
-> Setup instructions will be filled in as milestone M0 (project scaffolding) completes — see [IMPLEMENTATION_PLAN.md](./docs/IMPLEMENTATION_PLAN.md#m0--project-scaffolding--tooling). Placeholders below will become real, tested commands.
-
 ### Prerequisites
 
-- Python `<version TBD>`
-- Node.js `<version TBD>`
-- FFmpeg installed and on `PATH`
+- Python 3.12 (backend dependency management via [`uv`](https://docs.astral.sh/uv/))
+- Node.js 22.12+ (tested with 24 LTS; see `frontend/.nvmrc`)
+- FFmpeg installed and on `PATH` (needed starting M2/M5 — not required to run M0/M1)
 - (Optional) an ONVIF-compatible IP camera on the local network — the system also runs fully against local MP4 files without any camera
 
 ### Backend
 
 ```bash
-# TODO: fill in once M0 lands
 cd backend
-# uv sync / pip install -e . / poetry install — TBD
-# uvicorn app.main:app --reload
+uv sync
+uvicorn app.main:app --reload
 ```
+
+`GET http://localhost:8000/health` should return `{"status": "ok"}`.
 
 ### Frontend
 
 ```bash
-# TODO: fill in once M0 lands
 cd frontend
 npm install
 npm run dev
 ```
 
+Visit `http://localhost:5173` — the page displays live backend health (proxied to the backend via Vite's dev server).
+
 ### Configuration
 
-Copy `.env.example` to `.env` and fill in values — see `.env.example` for the current list of required settings once M0 lands.
+Copy `.env.example` to `.env` at the repo root and fill in values — see `.env.example` for the current list of settings (only `ENVIRONMENT` is required; the rest have sane defaults).
 
 ### Running Without a Camera
 

@@ -230,6 +230,38 @@ Each entry is a lightweight ADR (Architecture Decision Record): **Decision → C
 
 ---
 
+## TD-16: Python dependency management — `uv`
+
+**Decision**: `uv` manages the backend's virtual environment and dependencies (`backend/pyproject.toml` + committed `backend/uv.lock`), invoked as `uv sync` / `uv run`.
+
+**Context**: M0 needed a concrete package manager and none was fixed by prior docs — `docs/AI_PROJECT_CONTEXT.md`'s tech table names Python/FastAPI but not a specific dependency tool.
+
+**Alternatives considered**:
+- *pip + venv* — zero extra dependency (stdlib-adjacent), but no native lockfile without also adding `pip-tools`, and slower installs.
+- *Poetry* — mature and widely known, but a slower dependency resolver and a heavier tool than this project's dependency graph needs.
+
+**Tradeoffs**: One more tool a reviewer needs to know (`uv` instead of plain `pip`), offset by materially faster installs/resolution and a single lockfile that keeps `backend/uv.lock` reproducible across machines.
+
+**Future enhancement**: None anticipated; revisit only if `uv` stops being maintained.
+
+---
+
+## TD-17: Import-linter contract shape + pre-commit/CI enforcement
+
+**Decision**: `import-linter`'s `layers` contract type (configured in `backend/pyproject.toml` under `[tool.importlinter]`) enforces the dependency direction rule from `docs/FOLDER_STRUCTURE.md`: `app.interfaces` and `app.infrastructure` sit at the same (independent) top layer — neither may import the other — both may import `app.application`, which may import `app.domain` only. `app.core` is deliberately left out of the contract's layer list, since its entire job as the composition root is to import across every layer. Enforcement runs in two places: a local `pre-commit` hook (`.pre-commit-config.yaml`, invoking `uv run lint-imports`) and the `import-linter` step in `.github/workflows/ci.yml`.
+
+**Context**: `docs/IMPLEMENTATION_PLAN.md` M0 already named "import-linter (or equivalent)" as the presumptive tool for this gate but never fixed the exact contract shape or where enforcement runs; that's the real decision this entry records.
+
+**Alternatives considered**:
+- *A custom AST-walking script* — full control, but reimplements what `import-linter` already does well, and the `layers` contract type happens to map almost one-to-one onto `docs/FOLDER_STRUCTURE.md`'s "Dependency Direction Rule" diagram (including the independent-sibling case for `interfaces`/`infrastructure`).
+- *CI-only enforcement (no pre-commit)* — simpler, but lets a violation reach a pushed commit before being caught; pre-commit catches it locally first, CI catches anything committed with `--no-verify`.
+
+**Tradeoffs**: The `layers` contract can't express "core sees everything" as a rule (it can only constrain listed layers) — `core` is simply left out of the contract, which is a correct outcome here but relies on nothing else ever mistakenly relying on the contract to constrain `core`.
+
+**Future enhancement**: Add an explicit "independence" contract for `infrastructure`'s own subfolders (e.g. `analytics/` must not import `streaming/` directly) once those subfolders exist, per `docs/FOLDER_STRUCTURE.md`'s note that infrastructure modules should only talk to each other through ports.
+
+---
+
 ## Future Enhancements (Consolidated)
 
 | Area | Current (prototype) | Production direction |

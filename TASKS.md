@@ -13,15 +13,15 @@ Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./
 - [x] Documentation organized into `docs/`, README kept at root
 - [x] AI agent workflow docs (`AGENTS.md`, `TASKS.md`)
 - [x] AI prompt workflow templates (`prompts/`)
+- [x] Backend & Frontend Foundation (M0)
+- [x] Domain & Application Core (M1)
 
 # In Progress
 
-- [ ] _Nothing yet — no application code exists. Next up: Backend & Frontend Foundation (M0)._
+- [ ] _Nothing yet — no application code beyond M0/M1 exists. Next up: Video Source Abstraction (M2)._
 
 # Remaining
 
-- [ ] Backend & Frontend Foundation (M0)
-- [ ] Domain & Application Core (M1)
 - [ ] Video Source Abstraction — MP4 file source (M2)
 - [ ] ONVIF Camera Onboarding — IP + credential authentication (M3)
 - [ ] Camera Configuration — read/update resolution, FPS, bitrate, codec (M4)
