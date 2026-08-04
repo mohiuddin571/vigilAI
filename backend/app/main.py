@@ -37,6 +37,8 @@ app.include_router(
         build_onboard_camera_use_case=container.build_onboard_camera_use_case,
         build_list_cameras_use_case=container.build_list_cameras_use_case,
         build_get_camera_use_case=container.build_get_camera_use_case,
+        build_get_camera_config_use_case=container.build_get_camera_config_use_case,
+        build_update_camera_config_use_case=container.build_update_camera_config_use_case,
     )
 )
 

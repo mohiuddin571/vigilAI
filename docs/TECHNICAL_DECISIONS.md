@@ -290,6 +290,26 @@ Each entry is a lightweight ADR (Architecture Decision Record): **Decision → C
 
 ---
 
+## TD-19: M4 ONVIF configuration — capability port addition and codec-as-read-only
+
+**Decision**: Two related implementation-time decisions made while building M4 (ONVIF Camera Configuration):
+
+1. **Additive port method**: `ICameraGateway.get_video_encoder_configuration_options(profile_id: str) -> VideoEncoderCapabilities` (new abstract method), backed by a new domain value object `VideoEncoderCapabilities` (`backend/app/domain/value_objects/video_encoder_capabilities.py`: `codec`, `resolutions`, `fps_min`/`fps_max`, optional `bitrate_min_kbps`/`bitrate_max_kbps`). M1's `ICameraGateway.get_video_encoder_configuration`/`set_video_encoder_configuration` (both typed against `StreamProfile`, which only carries *current* values) had no way to express the *range* of values a camera reports as legal, but T-043's DoD ("edit form limited to supported fields") and IMPLEMENTATION_PLAN.md §M4's "edit form limited to supported fields" both require the frontend to know that range, not just discover it by trial-and-error PATCH failures. This mirrors TD-18's precedent for M3: extend `ICameraGateway` additively (no existing method's signature changed) rather than working around a genuine contract gap.
+2. **Codec treated as read-only, never offered as editable**: ONVIF's `GetVideoEncoderConfigurationOptions` response reports per-codec ranges (resolutions/framerate/bitrate) but never asserts whether a given video-encoder configuration can be *switched* to a different codec — that's vendor/firmware-dependent behavior the spec doesn't standardize. Rather than guess-map "no explicit prohibition" to "codec changes are allowed" (the same category of guess TD-18 already refused for the `"3"`-encoding finding), `UpdateCameraConfigUseCase`/`encoder_config.validate_requested_configuration` always reject a PATCH that requests a different codec than the profile's current one, via the normal `UnsupportedConfigurationError` → `422` path. This also serves as the concrete "unsupported field" test case required by the Testing Expectations, since it's a deterministic rejection that doesn't depend on fixture-specific bounds.
+
+**Context**: `docs/IMPLEMENTATION_PLAN.md` §M4 named `GetVideoEncoderConfiguration(s)`/`SetVideoEncoderConfiguration`/the config API/the frontend panel as deliverables but, like M3's plan before TD-18, didn't specify the exact port/DTO shape needed to carry capability data from the ONVIF response through to the frontend. `GetVideoEncoderConfiguration`/`SetVideoEncoderConfiguration` on `ICameraGateway` already fit T-040/T-041 as-is (both address by `profile_id` and operate on `StreamProfile`, matching the M3 `onvif_token` convention) — only the capability-exposure gap required a real decision.
+
+**Alternatives considered**:
+- *Fold capability data into `StreamProfile` itself* (e.g. optional `available_resolutions` fields) — rejected because `StreamProfile` is a persisted domain entity (round-trips through `SqlCameraRepository`); capability ranges are a live, request-scoped ONVIF fact, not something that belongs in persisted state or that every `StreamProfile` consumer (onboarding, persistence) needs to carry.
+- *No dedicated capability port method — validate inside `set_video_encoder_configuration` only, never expose ranges to the API* — this is in fact what `set_video_encoder_configuration` does internally for server-side enforcement (it re-fetches `GetVideoEncoderConfigurationOptions` itself rather than trusting a caller-supplied value, so validation holds even if a client never called GET first). But relying on it exclusively would leave the frontend with no way to build a form "limited to supported fields" except by trial-and-error submission, which doesn't satisfy T-043 as written.
+- *Model codec-switch support as a capability field* (e.g. `switchable_codecs: list[Codec]`) — rejected for the same reason TD-18 declined to guess-map the `"3"` encoding: ONVIF's schema gives no field asserting this, so any such list would be this system's own guess, not camera-reported fact.
+
+**Tradeoffs**: The capability fetch (`GetVideoEncoderConfigurationOptions`) is called twice across a GET-then-PATCH cycle — once by `GetCameraConfigUseCase` (to build the response) and again inside `OnvifCameraGateway.set_video_encoder_configuration` (to validate server-side) — rather than threading a single fetched value through both. Accepted because it keeps `set_video_encoder_configuration`'s validation self-contained and safe to call independently (e.g. from a future direct PATCH without a prior GET) rather than trusting a caller-supplied capability snapshot that could be stale. A camera that legitimately supports codec-switching on a given configuration will have that rejected by this system regardless — a real (if currently unencountered) limitation, not a bug in the capability model itself.
+
+**Future enhancement**: If a specific camera vendor's ONVIF extension does assert codec-switch support (e.g. via a documented vendor `Extension` element), add it to `VideoEncoderCapabilities` and loosen the check in `encoder_config.validate_requested_configuration` — don't infer it from silence in the base schema.
+
+---
+
 ## Future Enhancements (Consolidated)
 
 | Area | Current (prototype) | Production direction |

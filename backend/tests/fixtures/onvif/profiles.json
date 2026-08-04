@@ -3,6 +3,7 @@
     "token": "Profile_1",
     "Name": "MainStream",
     "VideoEncoderConfiguration": {
+      "token": "VideoEncoderToken_1",
       "Encoding": "H264",
       "Resolution": { "Width": 1920, "Height": 1080 },
       "Quality": 5.0,
@@ -13,6 +14,7 @@
     "token": "Profile_2",
     "Name": "SubStream",
     "VideoEncoderConfiguration": {
+      "token": "VideoEncoderToken_2",
       "Encoding": "JPEG",
       "Resolution": { "Width": 640, "Height": 360 },
       "Quality": 3.0,

@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 
 from app.domain.entities.camera import Camera
 from app.domain.entities.stream_profile import StreamProfile
+from app.domain.value_objects.video_encoder_capabilities import VideoEncoderCapabilities
 
 
 class ICameraGateway(ABC):
@@ -36,7 +37,20 @@ class ICameraGateway(ABC):
     ) -> None:
         """Apply a new encoder configuration.
 
-        Raises UnsupportedConfigurationError if the camera rejects the change.
+        Raises UnsupportedConfigurationError if the camera rejects the change,
+        including a requested field/value the camera's own profile does not
+        report as supported (see `get_video_encoder_configuration_options`).
+        """
+
+    @abstractmethod
+    async def get_video_encoder_configuration_options(
+        self, profile_id: str
+    ) -> VideoEncoderCapabilities:
+        """Fetch the camera-reported range of legal encoder values for one profile.
+
+        Added at M4 (docs/TECHNICAL_DECISIONS.md TD-19): callers (e.g. the
+        config API) use this to limit what's offered as editable, rather than
+        letting a client discover unsupported fields only by trial and error.
         """
 
     @abstractmethod

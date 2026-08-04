@@ -1,4 +1,9 @@
-import type { CameraCreateRequest, CameraResponse } from '../types/camera';
+import type {
+  CameraConfigResponse,
+  CameraConfigUpdateRequest,
+  CameraCreateRequest,
+  CameraResponse,
+} from '../types/camera';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -36,4 +41,33 @@ export async function createCamera(payload: CameraCreateRequest): Promise<Camera
     throw new ApiError(await parseErrorDetail(response), response.status);
   }
   return (await response.json()) as CameraResponse;
+}
+
+export async function getCameraConfig(
+  cameraId: string,
+  profileId: string,
+): Promise<CameraConfigResponse> {
+  const params = new URLSearchParams({ profile_id: profileId });
+  const response = await fetch(`/cameras/${cameraId}/config?${params.toString()}`);
+  if (!response.ok) {
+    throw new ApiError(await parseErrorDetail(response), response.status);
+  }
+  return (await response.json()) as CameraConfigResponse;
+}
+
+export async function updateCameraConfig(
+  cameraId: string,
+  profileId: string,
+  payload: CameraConfigUpdateRequest,
+): Promise<CameraConfigResponse> {
+  const params = new URLSearchParams({ profile_id: profileId });
+  const response = await fetch(`/cameras/${cameraId}/config?${params.toString()}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new ApiError(await parseErrorDetail(response), response.status);
+  }
+  return (await response.json()) as CameraConfigResponse;
 }

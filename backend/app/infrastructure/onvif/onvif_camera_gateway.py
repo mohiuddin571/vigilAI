@@ -6,16 +6,24 @@ from onvif import ONVIFCamera
 from app.application.ports.camera_gateway import ICameraGateway
 from app.domain.entities.camera import Camera
 from app.domain.entities.stream_profile import StreamProfile
-from app.domain.exceptions import CameraUnreachableError
-from app.infrastructure.onvif.mappers import classify_onvif_error, map_device_info, map_profile
+from app.domain.exceptions import CameraUnreachableError, DomainError, UnsupportedConfigurationError
+from app.domain.value_objects.video_encoder_capabilities import VideoEncoderCapabilities
+from app.infrastructure.onvif import encoder_config
+from app.infrastructure.onvif.mappers import (
+    classify_onvif_error,
+    map_codec,
+    map_device_info,
+    map_profile,
+)
 
 
 class OnvifCameraGateway(ICameraGateway):
     """`ICameraGateway` implementation wrapping `onvif-zeep-async` (TD-03).
 
-    `connect`, `get_device_info`, and `get_profiles` have real logic per M3;
-    `get_video_encoder_configuration`/`set_video_encoder_configuration` (M4)
-    and `get_stream_uri` (M5) are stub bodies only.
+    `connect`, `get_device_info`, `get_profiles` (M3), and
+    `get_video_encoder_configuration`/`set_video_encoder_configuration`/
+    `get_video_encoder_configuration_options` (M4) have real logic;
+    `get_stream_uri` (M5) is a stub body only.
 
     `client_factory` defaults to the real `ONVIFCamera` constructor and exists
     so integration tests can inject a fixture-driven fake without a real
@@ -69,12 +77,92 @@ class OnvifCameraGateway(ICameraGateway):
         return [mapped for p in profiles if (mapped := map_profile(p)) is not None]
 
     async def get_video_encoder_configuration(self, profile_id: str) -> StreamProfile:
-        raise NotImplementedError
+        self._require_connected()
+        try:
+            media = await self._camera.create_media_service()
+            config_token = await encoder_config.resolve_video_encoder_configuration_token(
+                media, profile_id
+            )
+            raw_config = await media.GetVideoEncoderConfiguration(ConfigurationToken=config_token)
+        except DomainError:
+            raise
+        except Exception as exc:
+            raise classify_onvif_error(exc) from exc
+
+        mapped = encoder_config.map_video_encoder_configuration(raw_config)
+        if mapped is None:
+            raise UnsupportedConfigurationError(
+                f"Camera reported an unrecognized encoding for profile {profile_id!r} "
+                "(see docs/TECHNICAL_DECISIONS.md TD-18)"
+            )
+        return mapped
 
     async def set_video_encoder_configuration(
         self, profile_id: str, profile: StreamProfile
     ) -> None:
-        raise NotImplementedError
+        self._require_connected()
+        try:
+            media = await self._camera.create_media_service()
+            config_token = await encoder_config.resolve_video_encoder_configuration_token(
+                media, profile_id
+            )
+            raw_config = await media.GetVideoEncoderConfiguration(ConfigurationToken=config_token)
+            raw_options = await media.GetVideoEncoderConfigurationOptions(
+                ConfigurationToken=config_token, ProfileToken=profile_id
+            )
+        except DomainError:
+            raise
+        except Exception as exc:
+            raise classify_onvif_error(exc) from exc
+
+        current_codec = map_codec(getattr(raw_config, "Encoding", ""))
+        if current_codec is None:
+            raise UnsupportedConfigurationError(
+                f"Camera reported an unrecognized encoding for profile {profile_id!r}; "
+                "refusing to update it (see docs/TECHNICAL_DECISIONS.md TD-18)"
+            )
+        capabilities = encoder_config.map_video_encoder_configuration_options(
+            raw_options, current_codec
+        )
+        encoder_config.validate_requested_configuration(profile, capabilities)
+        encoder_config.apply_stream_profile_to_raw_configuration(raw_config, profile)
+
+        try:
+            await media.SetVideoEncoderConfiguration(
+                Configuration=raw_config, ForcePersistence=True
+            )
+        except Exception as exc:
+            # Our own pre-validation above should catch most rejections, but the
+            # camera is the final authority — never let a raw SOAP fault escape.
+            raise UnsupportedConfigurationError(
+                str(exc) or "Camera rejected the requested configuration"
+            ) from exc
+
+    async def get_video_encoder_configuration_options(
+        self, profile_id: str
+    ) -> VideoEncoderCapabilities:
+        self._require_connected()
+        try:
+            media = await self._camera.create_media_service()
+            config_token = await encoder_config.resolve_video_encoder_configuration_token(
+                media, profile_id
+            )
+            raw_config = await media.GetVideoEncoderConfiguration(ConfigurationToken=config_token)
+            raw_options = await media.GetVideoEncoderConfigurationOptions(
+                ConfigurationToken=config_token, ProfileToken=profile_id
+            )
+        except DomainError:
+            raise
+        except Exception as exc:
+            raise classify_onvif_error(exc) from exc
+
+        codec = map_codec(getattr(raw_config, "Encoding", ""))
+        if codec is None:
+            raise UnsupportedConfigurationError(
+                f"Camera reported an unrecognized encoding for profile {profile_id!r} "
+                "(see docs/TECHNICAL_DECISIONS.md TD-18)"
+            )
+        return encoder_config.map_video_encoder_configuration_options(raw_options, codec)
 
     async def get_stream_uri(self, profile_id: str) -> str:
         raise NotImplementedError

@@ -4,15 +4,24 @@ from uuid import UUID
 from fastapi import APIRouter, status
 
 from app.application.use_cases.get_camera import GetCameraUseCase
+from app.application.use_cases.get_camera_config import GetCameraConfigUseCase
 from app.application.use_cases.list_cameras import ListCamerasUseCase
 from app.application.use_cases.onboard_camera import OnboardCameraUseCase
-from app.interfaces.schemas.camera import CameraCreateRequest, CameraResponse
+from app.application.use_cases.update_camera_config import UpdateCameraConfigUseCase
+from app.interfaces.schemas.camera import (
+    CameraConfigResponse,
+    CameraConfigUpdateRequest,
+    CameraCreateRequest,
+    CameraResponse,
+)
 
 
 def create_cameras_router(
     build_onboard_camera_use_case: Callable[[], OnboardCameraUseCase],
     build_list_cameras_use_case: Callable[[], ListCamerasUseCase],
     build_get_camera_use_case: Callable[[], GetCameraUseCase],
+    build_get_camera_config_use_case: Callable[[], GetCameraConfigUseCase],
+    build_update_camera_config_use_case: Callable[[], UpdateCameraConfigUseCase],
 ) -> APIRouter:
     """Build the `/cameras` router from use-case factories supplied by the composition root.
 
@@ -44,5 +53,19 @@ def create_cameras_router(
     async def get_camera(camera_id: UUID) -> CameraResponse:
         camera = await build_get_camera_use_case().execute(camera_id)
         return CameraResponse.from_domain(camera)
+
+    @router.get("/{camera_id}/config", response_model=CameraConfigResponse)
+    async def get_camera_config(camera_id: UUID, profile_id: str) -> CameraConfigResponse:
+        dto = await build_get_camera_config_use_case().execute(camera_id, profile_id)
+        return CameraConfigResponse.from_dto(dto)
+
+    @router.patch("/{camera_id}/config", response_model=CameraConfigResponse)
+    async def update_camera_config(
+        camera_id: UUID, profile_id: str, body: CameraConfigUpdateRequest
+    ) -> CameraConfigResponse:
+        profile = await build_update_camera_config_use_case().execute(
+            camera_id, profile_id, body.to_dto()
+        )
+        return CameraConfigResponse.from_profile(profile)
 
     return router

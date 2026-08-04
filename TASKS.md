@@ -16,6 +16,7 @@ Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./
 - [x] Backend & Frontend Foundation (M0)
 - [x] Domain & Application Core (M1)
 - [x] ONVIF Camera Onboarding — IP + credential authentication (M3)
+- [x] Camera Configuration — read/update resolution, FPS, bitrate, codec (M4)
 
 # In Progress
 
@@ -24,7 +25,6 @@ Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./
 # Remaining
 
 - [ ] Video Source Abstraction — MP4 file source (M2)
-- [ ] Camera Configuration — read/update resolution, FPS, bitrate, codec (M4)
 - [ ] RTSP Stream Manager / Browser Live Streaming (M5)
 - [ ] Automatic Reconnection (M5)
 - [ ] Recording (M6)

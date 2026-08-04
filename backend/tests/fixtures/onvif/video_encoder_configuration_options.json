@@ -1,0 +1,32 @@
+{
+  "VideoEncoderToken_1": {
+    "QualityRange": { "Min": 1, "Max": 10 },
+    "H264": {
+      "ResolutionsAvailable": [
+        { "Width": 1920, "Height": 1080 },
+        { "Width": 1280, "Height": 720 },
+        { "Width": 640, "Height": 480 }
+      ],
+      "GovLengthRange": { "Min": 1, "Max": 400 },
+      "FrameRateRange": { "Min": 1, "Max": 30 },
+      "EncodingIntervalRange": { "Min": 1, "Max": 10 },
+      "H264ProfilesSupported": ["Main", "High"]
+    },
+    "Extension": {
+      "H264": {
+        "BitrateRange": { "Min": 512, "Max": 8192 }
+      }
+    }
+  },
+  "VideoEncoderToken_2": {
+    "QualityRange": { "Min": 1, "Max": 10 },
+    "JPEG": {
+      "ResolutionsAvailable": [
+        { "Width": 640, "Height": 360 },
+        { "Width": 320, "Height": 240 }
+      ],
+      "FrameRateRange": { "Min": 1, "Max": 15 },
+      "EncodingIntervalRange": { "Min": 1, "Max": 5 }
+    }
+  }
+}

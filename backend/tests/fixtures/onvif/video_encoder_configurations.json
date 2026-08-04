@@ -1,0 +1,34 @@
+{
+  "VideoEncoderToken_1": {
+    "token": "VideoEncoderToken_1",
+    "Name": "VideoEncoder_1",
+    "UseCount": 1,
+    "Encoding": "H264",
+    "Resolution": { "Width": 1920, "Height": 1080 },
+    "Quality": 5.0,
+    "RateControl": { "FrameRateLimit": 25, "EncodingInterval": 1, "BitrateLimit": 4096 },
+    "Multicast": {
+      "Address": { "Type": "IPv4", "IPv4Address": "0.0.0.0" },
+      "Port": 0,
+      "TTL": 1,
+      "AutoStart": false
+    },
+    "SessionTimeout": "PT60S"
+  },
+  "VideoEncoderToken_2": {
+    "token": "VideoEncoderToken_2",
+    "Name": "VideoEncoder_2",
+    "UseCount": 1,
+    "Encoding": "JPEG",
+    "Resolution": { "Width": 640, "Height": 360 },
+    "Quality": 3.0,
+    "RateControl": { "FrameRateLimit": 10, "EncodingInterval": 1, "BitrateLimit": 512 },
+    "Multicast": {
+      "Address": { "Type": "IPv4", "IPv4Address": "0.0.0.0" },
+      "Port": 0,
+      "TTL": 1,
+      "AutoStart": false
+    },
+    "SessionTimeout": "PT60S"
+  }
+}

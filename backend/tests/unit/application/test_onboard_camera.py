@@ -11,6 +11,7 @@ from app.domain.exceptions import CameraAuthenticationError
 from app.domain.value_objects.bitrate import BitrateKbps
 from app.domain.value_objects.codec import Codec
 from app.domain.value_objects.resolution import Resolution
+from app.domain.value_objects.video_encoder_capabilities import VideoEncoderCapabilities
 
 
 class FakeCameraGateway(ICameraGateway):
@@ -54,6 +55,11 @@ class FakeCameraGateway(ICameraGateway):
     async def set_video_encoder_configuration(
         self, profile_id: str, profile: StreamProfile
     ) -> None:
+        raise NotImplementedError
+
+    async def get_video_encoder_configuration_options(
+        self, profile_id: str
+    ) -> VideoEncoderCapabilities:
         raise NotImplementedError
 
     async def get_stream_uri(self, profile_id: str) -> str:

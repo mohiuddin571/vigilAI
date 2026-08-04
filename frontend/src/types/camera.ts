@@ -16,6 +16,7 @@ export interface StreamProfileResponse {
   bitrate_kbps: number;
   fps: number;
   is_primary: boolean;
+  onvif_token: string | null;
 }
 
 export interface CameraResponse {
@@ -29,4 +30,33 @@ export interface CameraResponse {
   firmware_version: string | null;
   is_online: boolean;
   stream_profiles: StreamProfileResponse[];
+}
+
+export interface VideoEncoderCapabilitiesResponse {
+  resolutions: string[];
+  fps_min: number;
+  fps_max: number;
+  bitrate_min_kbps: number | null;
+  bitrate_max_kbps: number | null;
+}
+
+export interface CameraConfigResponse {
+  profile_id: string;
+  name: string;
+  resolution: string;
+  codec: string;
+  bitrate_kbps: number;
+  fps: number;
+  capabilities: VideoEncoderCapabilitiesResponse | null;
+}
+
+export interface ResolutionUpdate {
+  width: number;
+  height: number;
+}
+
+export interface CameraConfigUpdateRequest {
+  resolution?: ResolutionUpdate;
+  bitrate_kbps?: number;
+  fps?: number;
 }

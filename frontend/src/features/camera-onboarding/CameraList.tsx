@@ -1,11 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 import { listCameras } from '../../services/camerasApi';
+import ConfigPanel from './ConfigPanel';
 
 function CameraList() {
   const { data, isLoading, isError } = useQuery({
     queryKey: ['cameras'],
     queryFn: listCameras,
   });
+  const [openProfile, setOpenProfile] = useState<{ cameraId: string; profileId: string } | null>(
+    null,
+  );
 
   if (isLoading) return <p className="text-sm text-slate-500">Loading cameras…</p>;
   if (isError) return <p className="text-sm text-red-600">Failed to load cameras.</p>;
@@ -28,11 +33,42 @@ function CameraList() {
             {camera.ip_address}:{camera.port} — {camera.manufacturer ?? 'Unknown manufacturer'}{' '}
             {camera.model ?? ''}
           </p>
-          <p className="text-xs text-slate-400">
-            {camera.stream_profiles.length} stream profile
-            {camera.stream_profiles.length === 1 ? '' : 's'}:{' '}
-            {camera.stream_profiles.map((profile) => profile.resolution).join(', ')}
-          </p>
+          <ul className="mt-1 space-y-1">
+            {camera.stream_profiles.map((profile) => {
+              const isOpen =
+                openProfile?.cameraId === camera.id && openProfile.profileId === profile.onvif_token;
+              return (
+                <li key={profile.id} className="text-xs text-slate-400">
+                  <div className="flex items-center gap-2">
+                    <span>
+                      {profile.name}: {profile.resolution} @ {profile.fps}fps,{' '}
+                      {profile.bitrate_kbps}kbps ({profile.codec})
+                    </span>
+                    {profile.onvif_token && (
+                      <button
+                        type="button"
+                        className="text-slate-500 underline hover:text-slate-700"
+                        onClick={() =>
+                          setOpenProfile(
+                            isOpen
+                              ? null
+                              : { cameraId: camera.id, profileId: profile.onvif_token as string },
+                          )
+                        }
+                      >
+                        {isOpen ? 'Hide config' : 'Configure'}
+                      </button>
+                    )}
+                  </div>
+                  {isOpen && profile.onvif_token && (
+                    <div className="mt-2">
+                      <ConfigPanel cameraId={camera.id} profileId={profile.onvif_token} />
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         </li>
       ))}
     </ul>
