@@ -149,4 +149,4 @@ If a future prompt seems to ask for one of these, confirm scope before building 
 | [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) | Know what milestone comes next and its acceptance criteria |
 | [TASK_BACKLOG.md](./TASK_BACKLOG.md) | Find a specific prioritized task with its Definition of Done |
 | [PROMPTING_GUIDE.md](./PROMPTING_GUIDE.md) | Write a well-scoped Claude Code prompt for the next chunk of work |
-| [README.md](./README.md) | Get the outward-facing project overview |
+| [README.md](../README.md) | Get the outward-facing project overview |

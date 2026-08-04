@@ -6,14 +6,15 @@ This tree is the target layout the [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLA
 
 ```
 vigilAI/
-├── AI_PROJECT_CONTEXT.md
-├── ARCHITECTURE.md
-├── FOLDER_STRUCTURE.md
-├── IMPLEMENTATION_PLAN.md
-├── PROMPTING_GUIDE.md
 ├── README.md
-├── TECHNICAL_DECISIONS.md
-├── TASK_BACKLOG.md
+├── docs/
+│   ├── AI_PROJECT_CONTEXT.md
+│   ├── ARCHITECTURE.md
+│   ├── FOLDER_STRUCTURE.md
+│   ├── IMPLEMENTATION_PLAN.md
+│   ├── PROMPTING_GUIDE.md
+│   ├── TECHNICAL_DECISIONS.md
+│   └── TASK_BACKLOG.md
 ├── .env.example
 ├── .gitignore
 │
@@ -150,6 +151,7 @@ vigilAI/
 
 ## Top-Level Non-Code Folders
 
+- **`docs/`** — all architecture, planning, design, and AI-context documentation (everything except `README.md`, which stays at the repo root as the entry point). No code; nothing under `app/` or `frontend/src/` imports from it.
 - **`storage/recordings/`** — MP4 segments written by the Recording Worker. Gitignored; the filesystem implementation of `IRecordingRepository` points here by default (configurable path).
 - **`storage/models/`** — downloaded/cached model weights (YOLO `.pt` files, EasyOCR model cache). Gitignored.
 - **`scripts/`** — one-off operational scripts (e.g. seed a demo camera record, download model weights, generate a sample MP4 fixture). Not part of the application; never imported by `app/`.
