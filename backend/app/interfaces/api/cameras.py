@@ -8,11 +8,13 @@ from app.application.use_cases.get_camera_config import GetCameraConfigUseCase
 from app.application.use_cases.list_cameras import ListCamerasUseCase
 from app.application.use_cases.onboard_camera import OnboardCameraUseCase
 from app.application.use_cases.update_camera_config import UpdateCameraConfigUseCase
+from app.application.use_cases.update_camera_rtsp_override import UpdateCameraRtspOverrideUseCase
 from app.interfaces.schemas.camera import (
     CameraConfigResponse,
     CameraConfigUpdateRequest,
     CameraCreateRequest,
     CameraResponse,
+    CameraRtspOverrideRequest,
 )
 
 
@@ -22,6 +24,9 @@ def create_cameras_router(
     build_get_camera_use_case: Callable[[], GetCameraUseCase],
     build_get_camera_config_use_case: Callable[[], GetCameraConfigUseCase],
     build_update_camera_config_use_case: Callable[[], UpdateCameraConfigUseCase],
+    build_update_camera_rtsp_override_use_case: (
+        Callable[[], UpdateCameraRtspOverrideUseCase] | None
+    ) = None,
 ) -> APIRouter:
     """Build the `/cameras` router from use-case factories supplied by the composition root.
 
@@ -41,6 +46,7 @@ def create_cameras_router(
             username=body.username,
             password=body.password,
             port=body.port,
+            rtsp_url_override=body.rtsp_url_override,
         )
         return CameraResponse.from_domain(camera)
 
@@ -67,5 +73,16 @@ def create_cameras_router(
             camera_id, profile_id, body.to_dto()
         )
         return CameraConfigResponse.from_profile(profile)
+
+    if build_update_camera_rtsp_override_use_case is not None:
+
+        @router.patch("/{camera_id}/rtsp-url", response_model=CameraResponse)
+        async def update_camera_rtsp_url(
+            camera_id: UUID, body: CameraRtspOverrideRequest
+        ) -> CameraResponse:
+            camera = await build_update_camera_rtsp_override_use_case().execute(
+                camera_id, body.rtsp_url_override
+            )
+            return CameraResponse.from_domain(camera)
 
     return router

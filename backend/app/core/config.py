@@ -41,5 +41,21 @@ class Settings(BaseSettings):
     # Bounded, drop-oldest frame queue size per Stream Worker (M2, T-023).
     stream_worker_frame_queue_max_size: int = 10
 
+    # RTSP decode (M5, T-050/T-051): how long `cv2.VideoCapture`'s FFmpeg
+    # backend waits to open/read an RTSP source before treating it as a
+    # failed connection attempt (which `ReconnectSupervisor` then retries).
+    rtsp_open_timeout_ms: int = 5000
+    rtsp_read_timeout_ms: int = 5000
+    # Public RTSP port-forwards commonly expose the control TCP port but not
+    # the separate UDP RTP ports, so interleaved TCP is the safe default.
+    rtsp_transport: Literal["tcp", "udp"] = "tcp"
+
+    # MJPEG live-view (M5, T-052; TD-10).
+    mjpeg_boundary: str = "frame"
+    mjpeg_jpeg_quality: int = 80
+
+    # WebSocket stream-status channel poll interval (M5, T-053).
+    stream_status_poll_interval_seconds: float = 1.0
+
 
 settings = Settings()  # type: ignore[call-arg]

@@ -137,6 +137,22 @@ async def _supervised_source_main(
     health_queue: Any,
     stop_event: ProcessEvent,
 ) -> None:
+    # `multiprocessing.Queue.put_nowait()` only bounds the *logical* queue
+    # size (T-023) — it hands items to a background feeder thread that
+    # serializes and writes them to the underlying OS pipe, and that
+    # thread's own backlog is unbounded. If this process is ever asked to
+    # exit while that backlog hasn't fully drained (e.g. a source producing
+    # faster than the parent consumes, exactly the "sustained overload"
+    # scenario T-023 targets), the interpreter blocks process exit until the
+    # feeder thread finishes flushing — a well-documented `multiprocessing`
+    # gotcha (docs: "Joining processes that use queues"). `cancel_join_thread()`
+    # opts out of that flush-on-exit wait, consistent with this queue already
+    # being drop-oldest/lossy by design: losing whatever's still unflushed
+    # when this process is told to stop is no different in kind from
+    # dropping the oldest frame when the queue is logically full.
+    frame_queue.cancel_join_thread()
+    health_queue.cancel_join_thread()
+
     source = frame_source_factory()
     supervisor = ReconnectSupervisor(source, backoff_schedule)
 

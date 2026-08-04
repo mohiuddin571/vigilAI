@@ -1,6 +1,7 @@
+from urllib.parse import urlparse
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.application.dto.camera_config import CameraConfigDTO, CameraConfigUpdate
 from app.domain.entities.camera import Camera
@@ -17,6 +18,28 @@ class CameraCreateRequest(BaseModel):
     port: int = Field(default=80, gt=0, le=65535)
     username: str = Field(min_length=1)
     password: str = Field(min_length=1)
+    rtsp_url_override: str | None = None
+
+    @field_validator("rtsp_url_override")
+    @classmethod
+    def validate_rtsp_url_override(cls, value: str | None) -> str | None:
+        if value is None or not value.strip():
+            return None
+        parsed = urlparse(value)
+        if parsed.scheme not in {"rtsp", "rtsps"} or not parsed.hostname:
+            raise ValueError("RTSP URL override must be an rtsp:// or rtsps:// URL")
+        return value
+
+
+class CameraRtspOverrideRequest(BaseModel):
+    """Update only the optional public RTSP endpoint for an onboarded camera."""
+
+    rtsp_url_override: str | None = None
+
+    @field_validator("rtsp_url_override")
+    @classmethod
+    def validate_rtsp_url_override(cls, value: str | None) -> str | None:
+        return CameraCreateRequest.validate_rtsp_url_override(value)
 
 
 class StreamProfileResponse(BaseModel):
@@ -38,6 +61,7 @@ class CameraResponse(BaseModel):
     ip_address: str
     port: int
     username: str
+    rtsp_url_override: str | None
     manufacturer: str | None
     model: str | None
     firmware_version: str | None
@@ -52,6 +76,7 @@ class CameraResponse(BaseModel):
             ip_address=camera.ip_address,
             port=camera.port,
             username=camera.username,
+            rtsp_url_override=camera.rtsp_url_override,
             manufacturer=camera.manufacturer,
             model=camera.model,
             firmware_version=camera.firmware_version,

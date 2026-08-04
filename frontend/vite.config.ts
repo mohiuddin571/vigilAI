@@ -8,6 +8,8 @@ export default defineConfig({
     proxy: {
       '/health': 'http://localhost:8000',
       '/cameras': 'http://localhost:8000',
+      '/streams': 'http://localhost:8000',
+      '/ws': { target: 'ws://localhost:8000', ws: true },
     },
   },
 })

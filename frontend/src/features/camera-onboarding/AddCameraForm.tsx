@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ApiError, createCamera } from '../../services/camerasApi';
 
-const initialFormState = { ipAddress: '', port: '80', username: '', password: '' };
+const initialFormState = { ipAddress: '', port: '80', username: '', password: '', rtspUrlOverride: '' };
 
 function AddCameraForm() {
   const [form, setForm] = useState(initialFormState);
@@ -15,6 +15,7 @@ function AddCameraForm() {
         port: Number(form.port) || 80,
         username: form.username,
         password: form.password,
+        rtsp_url_override: form.rtspUrlOverride || null,
       }),
     onSuccess: () => {
       setForm(initialFormState);
@@ -48,6 +49,15 @@ function AddCameraForm() {
             value={form.port}
             onChange={(event) => setForm({ ...form, port: event.target.value })}
             inputMode="numeric"
+          />
+        </label>
+        <label className="col-span-2 flex flex-col gap-1 text-sm text-slate-600">
+          Public RTSP URL override (optional)
+          <input
+            className="rounded border border-slate-300 px-2 py-1"
+            value={form.rtspUrlOverride}
+            onChange={(event) => setForm({ ...form, rtspUrlOverride: event.target.value })}
+            placeholder="rtsp://public-host:port/path"
           />
         </label>
         <label className="flex flex-col gap-1 text-sm text-slate-600">

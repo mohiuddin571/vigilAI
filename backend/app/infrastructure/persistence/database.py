@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -23,6 +24,14 @@ def build_session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSessio
 
 
 async def init_db(engine: AsyncEngine) -> None:
-    """Create every table that doesn't exist yet. Idempotent."""
+    """Create tables and apply the small additive SQLite schema migrations."""
     async with engine.begin() as conn:
         await conn.run_sync(SQLModel.metadata.create_all)
+        if engine.url.get_backend_name() == "sqlite":
+            column_names = await conn.run_sync(
+                lambda sync_conn: {
+                    column["name"] for column in inspect(sync_conn).get_columns("camera")
+                }
+            )
+            if "rtsp_url_override" not in column_names:
+                await conn.execute(text("ALTER TABLE camera ADD COLUMN rtsp_url_override VARCHAR"))
