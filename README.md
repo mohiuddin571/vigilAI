@@ -67,36 +67,78 @@ Full reasoning for every choice, including tradeoffs and rejected alternatives: 
 
 ## Getting Started
 
-### Prerequisites
+The current milestone (M0/M1) is a backend health check and a frontend page that displays it — there's no camera/video functionality to run yet (that starts at M2). These steps get that running.
 
-- Python 3.12 (backend dependency management via [`uv`](https://docs.astral.sh/uv/))
-- Node.js 22.12+ (tested with 24 LTS; see `frontend/.nvmrc`)
-- FFmpeg installed and on `PATH` (needed starting M2/M5 — not required to run M0/M1)
-- (Optional) an ONVIF-compatible IP camera on the local network — the system also runs fully against local MP4 files without any camera
+### Step 1 — One-time machine setup
 
-### Backend
+Skip anything you already have installed.
+
+| Tool | Check if installed | Install (macOS) |
+|---|---|---|
+| Git | `git --version` | `brew install git` |
+| [`uv`](https://docs.astral.sh/uv/) (Python 3.12 + backend deps) | `uv --version` | `brew install uv` |
+| Node.js 22.12+ (frontend) | `node --version` | `brew install nvm` then `nvm install --lts && nvm use --lts` |
+| FFmpeg | `ffmpeg -version` | `brew install ffmpeg` — **not needed yet**, only from M2/M5 onward |
+
+`uv` and `nvm` manage their own tool versions per-project, so you don't need to separately install Python or pin a global Node version.
+
+### Step 2 — Get the code
+
+```bash
+git clone https://github.com/mohiuddin571/vigilAI.git
+cd vigilAI
+```
+
+(If you already have the repo, just `git pull` instead.)
+
+### Step 3 — Configure
+
+Every time you set up the repo on a machine for the first time, copy the example env file:
+
+```bash
+cp .env.example .env
+```
+
+`ENVIRONMENT` is the only required setting (defaults to `development` in the example file) — the backend fails fast at startup if `.env` is missing or `ENVIRONMENT` isn't set. See `.env.example` for the full list.
+
+### Step 4 — Run the backend
+
+Open a terminal at the repo root:
 
 ```bash
 cd backend
-uv sync
-uvicorn app.main:app --reload
+uv sync                              # installs dependencies (only needed once, or after pulling new changes)
+uv run uvicorn app.main:app --reload
 ```
 
-`GET http://localhost:8000/health` should return `{"status": "ok"}`.
+Leave this terminal running. You should see `Uvicorn running on http://127.0.0.1:8000`. Verify it in a second terminal:
 
-### Frontend
+```bash
+curl http://localhost:8000/health
+# {"status":"ok"}
+```
+
+### Step 5 — Run the frontend
+
+Open a **new, separate terminal** at the repo root (keep the backend terminal running):
 
 ```bash
 cd frontend
-npm install
+npm install    # only needed once, or after pulling new changes
 npm run dev
 ```
 
-Visit `http://localhost:5173` — the page displays live backend health (proxied to the backend via Vite's dev server).
+Leave this terminal running too. Open **http://localhost:5173** in your browser — you should see a "VigilAI" card reading "Backend: ok". The frontend proxies `/health` to the backend on port 8000, so the backend must already be running (Step 4) for this to show `ok` instead of an error.
 
-### Configuration
+### Stopping the app
 
-Copy `.env.example` to `.env` at the repo root and fill in values — see `.env.example` for the current list of settings (only `ENVIRONMENT` is required; the rest have sane defaults).
+Press `Ctrl+C` in each terminal (backend and frontend) to stop them. If you started them in the background instead and lost track of them:
+
+```bash
+lsof -i :8000   # find the backend process
+lsof -i :5173   # find the frontend process
+kill <PID>      # PID is in the second column of the lsof output
+```
 
 ### Running Without a Camera
 
