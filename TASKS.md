@@ -15,15 +15,15 @@ Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./
 - [x] AI prompt workflow templates (`prompts/`)
 - [x] Backend & Frontend Foundation (M0)
 - [x] Domain & Application Core (M1)
+- [x] ONVIF Camera Onboarding — IP + credential authentication (M3)
 
 # In Progress
 
-- [ ] _Nothing yet — no application code beyond M0/M1 exists. Next up: Video Source Abstraction (M2)._
+- [ ] _Nothing yet. Next up: Video Source Abstraction (M2)._
 
 # Remaining
 
 - [ ] Video Source Abstraction — MP4 file source (M2)
-- [ ] ONVIF Camera Onboarding — IP + credential authentication (M3)
 - [ ] Camera Configuration — read/update resolution, FPS, bitrate, codec (M4)
 - [ ] RTSP Stream Manager / Browser Live Streaming (M5)
 - [ ] Automatic Reconnection (M5)
@@ -45,4 +45,4 @@ Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./
 
 **Note on "Demo Preparation"**: not tracked as a milestone in `docs/IMPLEMENTATION_PLAN.md` since it's evaluation logistics rather than system design. When it's time to plan it, either add detail here directly or promote it to an `M17` entry in IMPLEMENTATION_PLAN.md — don't let scope accumulate silently under this one line.
 
-**Note on ordering**: this list follows `docs/IMPLEMENTATION_PLAN.md`'s actual build order, not a flat feature list — most notably, Video Source Abstraction (M2) comes before ONVIF work (M3/M4) because the analytics pipeline is proven against local MP4 files before any camera dependency exists, and Analytics Pipeline Foundation (M8) comes before individual analytics capabilities (M9–M13) because it's what makes those capabilities source-agnostic rather than ONVIF-specific. See IMPLEMENTATION_PLAN.md's "Milestone Dependency Graph" for the full picture.
+**Note on ordering**: this list follows `docs/IMPLEMENTATION_PLAN.md`'s actual build order, not a flat feature list — most notably, Video Source Abstraction (M2) comes before ONVIF work (M3/M4) because the analytics pipeline is proven against local MP4 files before any camera dependency exists, and Analytics Pipeline Foundation (M8) comes before individual analytics capabilities (M9–M13) because it's what makes those capabilities source-agnostic rather than ONVIF-specific. See IMPLEMENTATION_PLAN.md's "Milestone Dependency Graph" for the full picture. M3 landing before M2 in the Completed list above is not a deviation from this: `docs/IMPLEMENTATION_PLAN.md` §M3's own Dependencies line states M3 depends only on M1 and is explicitly "Independent of M2 — can be built in parallel if needed."

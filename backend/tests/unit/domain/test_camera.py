@@ -9,6 +9,15 @@ def test_valid_camera() -> None:
     assert camera.name == "Front Door"
     assert camera.is_online is False
     assert camera.stream_profiles == []
+    assert camera.port == 80
+    assert camera.password == ""
+
+
+def test_password_excluded_from_repr() -> None:
+    camera = Camera(
+        name="Front Door", ip_address="192.168.1.10", username="admin", password="s3cret"
+    )
+    assert "s3cret" not in repr(camera)
 
 
 def test_accepts_ipv6_address() -> None:

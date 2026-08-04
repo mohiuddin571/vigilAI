@@ -13,10 +13,8 @@ class OnboardCameraUseCase:
     via `camera_repository` and returned.
 
     Raises:
-        CameraUnreachableError: the camera could not be reached or authentication failed.
-
-    Real logic lands at M3 (docs/TASK_BACKLOG.md T-033); this milestone only
-    establishes the signature and its dependency on the M1 ports.
+        CameraAuthenticationError: the camera rejected the supplied credentials.
+        CameraUnreachableError: the camera could not be reached over the network.
     """
 
     def __init__(
@@ -25,5 +23,31 @@ class OnboardCameraUseCase:
         self._camera_gateway = camera_gateway
         self._camera_repository = camera_repository
 
-    async def execute(self, ip_address: str, username: str, password: str) -> Camera:
-        raise NotImplementedError
+    async def execute(
+        self, ip_address: str, username: str, password: str, port: int = 80
+    ) -> Camera:
+        try:
+            await self._camera_gateway.connect(ip_address, username, password, port)
+            device_info = await self._camera_gateway.get_device_info()
+            profiles = await self._camera_gateway.get_profiles()
+        finally:
+            await self._camera_gateway.disconnect()
+
+        name = ip_address
+        if device_info.manufacturer and device_info.model:
+            name = f"{device_info.manufacturer} {device_info.model}"
+
+        camera = Camera(
+            name=name,
+            ip_address=ip_address,
+            username=username,
+            port=port,
+            password=password,
+            manufacturer=device_info.manufacturer,
+            model=device_info.model,
+            firmware_version=device_info.firmware_version,
+            stream_profiles=profiles,
+            is_online=True,
+        )
+        await self._camera_repository.add(camera)
+        return camera

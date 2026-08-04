@@ -25,6 +25,12 @@ def test_valid_stream_profile() -> None:
     profile = _make()
     assert profile.fps == 30
     assert profile.is_primary is False
+    assert profile.onvif_token is None
+
+
+def test_carries_onvif_token() -> None:
+    profile = _make(onvif_token="Profile_1")
+    assert profile.onvif_token == "Profile_1"
 
 
 def test_rejects_empty_name() -> None:

@@ -1,0 +1,26 @@
+[
+  {
+    "token": "Profile_1",
+    "Name": "MainStream",
+    "VideoEncoderConfiguration": {
+      "Encoding": "H264",
+      "Resolution": { "Width": 1920, "Height": 1080 },
+      "Quality": 5.0,
+      "RateControl": { "FrameRateLimit": 25, "EncodingInterval": 1, "BitrateLimit": 4096 }
+    }
+  },
+  {
+    "token": "Profile_2",
+    "Name": "SubStream",
+    "VideoEncoderConfiguration": {
+      "Encoding": "JPEG",
+      "Resolution": { "Width": 640, "Height": 360 },
+      "Quality": 3.0,
+      "RateControl": { "FrameRateLimit": 10, "EncodingInterval": 1, "BitrateLimit": 512 }
+    }
+  },
+  {
+    "token": "Profile_3",
+    "Name": "AudioOnly"
+  }
+]

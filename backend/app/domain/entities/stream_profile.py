@@ -18,6 +18,7 @@ class StreamProfile:
     fps: int
     id: UUID = field(default_factory=uuid4)
     is_primary: bool = False
+    onvif_token: str | None = None
 
     def __post_init__(self) -> None:
         if not self.name.strip():

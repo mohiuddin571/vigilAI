@@ -1,0 +1,48 @@
+from collections.abc import Callable
+from uuid import UUID
+
+from fastapi import APIRouter, status
+
+from app.application.use_cases.get_camera import GetCameraUseCase
+from app.application.use_cases.list_cameras import ListCamerasUseCase
+from app.application.use_cases.onboard_camera import OnboardCameraUseCase
+from app.interfaces.schemas.camera import CameraCreateRequest, CameraResponse
+
+
+def create_cameras_router(
+    build_onboard_camera_use_case: Callable[[], OnboardCameraUseCase],
+    build_list_cameras_use_case: Callable[[], ListCamerasUseCase],
+    build_get_camera_use_case: Callable[[], GetCameraUseCase],
+) -> APIRouter:
+    """Build the `/cameras` router from use-case factories supplied by the composition root.
+
+    A factory (not an already-built instance) per TD-08: `OnboardCameraUseCase`
+    holds an `OnvifCameraGateway` with per-connection mutable state, so a fresh
+    instance is needed for every request — building it once at startup would
+    let concurrent onboarding requests corrupt each other's ONVIF session.
+    FastAPI's `Depends` is deliberately not used here (TD-02: reserved for
+    request-scoped concerns, not this project's DI mechanism).
+    """
+    router = APIRouter(prefix="/cameras", tags=["cameras"])
+
+    @router.post("", response_model=CameraResponse, status_code=status.HTTP_201_CREATED)
+    async def onboard_camera(body: CameraCreateRequest) -> CameraResponse:
+        camera = await build_onboard_camera_use_case().execute(
+            ip_address=body.ip_address,
+            username=body.username,
+            password=body.password,
+            port=body.port,
+        )
+        return CameraResponse.from_domain(camera)
+
+    @router.get("", response_model=list[CameraResponse])
+    async def list_cameras() -> list[CameraResponse]:
+        cameras = await build_list_cameras_use_case().execute()
+        return [CameraResponse.from_domain(camera) for camera in cameras]
+
+    @router.get("/{camera_id}", response_model=CameraResponse)
+    async def get_camera(camera_id: UUID) -> CameraResponse:
+        camera = await build_get_camera_use_case().execute(camera_id)
+        return CameraResponse.from_domain(camera)
+
+    return router

@@ -91,7 +91,7 @@ Each milestone lists **Goal**, **Deliverables**, **Files** (primary ones touched
 - Basic frontend "Add Camera" form.
 - Clear, typed error surfaces for unreachable host, auth failure, and unsupported ONVIF version.
 
-**Files**: `backend/app/infrastructure/onvif/**`, `backend/app/interfaces/api/cameras.py`, `backend/app/interfaces/schemas/camera.py`, `frontend/src/features/camera-onboarding/**`.
+**Files**: `backend/app/infrastructure/onvif/**`, `backend/app/interfaces/api/cameras.py`, `backend/app/interfaces/schemas/camera.py`, `frontend/src/features/camera-onboarding/**`. Also, not obvious from the deliverables above but required to actually satisfy this milestone's acceptance criteria (see TD-18): `backend/app/infrastructure/persistence/**` (`SqlCameraRepository` — AC #3, "persisted... survives an API restart," has no adapter without it), `backend/app/infrastructure/security/credential_cipher.py` (TD-15's encryption requirement), `backend/app/core/exception_handlers.py` (the typed-exception-to-HTTP-status mapping the Constraints section requires), and the `backend/app/core/container.py`/`backend/app/main.py` wiring for all of it.
 
 **Acceptance Criteria**:
 - Against the evaluator's physical camera (or, until it's available, an ONVIF camera simulator / recorded SOAP fixtures), `POST /cameras` with valid IP/username/password returns `201` with device info and at least one media profile.

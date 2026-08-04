@@ -4,7 +4,7 @@ A Video Management System (VMS) with integrated video analytics: ONVIF camera on
 
 Built as a production-quality prototype demonstrating Clean Architecture applied to a real-time video/AI system.
 
-> **Status**: 🚧 M0 (Project Scaffolding & Tooling) and M1 (Domain & Application Core) complete. Next up: M2 (Frame Source Abstraction). See [Project State](./docs/AI_PROJECT_CONTEXT.md#9-project-state).
+> **Status**: 🚧 M0 (Project Scaffolding & Tooling), M1 (Domain & Application Core), and M3 (ONVIF Camera Onboarding) complete — M3 landed ahead of M2 since it's independent of it (see `docs/IMPLEMENTATION_PLAN.md` §M3 "Dependencies"). Next up: M2 (Frame Source Abstraction). See [Project State](./docs/AI_PROJECT_CONTEXT.md#9-project-state).
 
 ---
 
@@ -99,7 +99,13 @@ Every time you set up the repo on a machine for the first time, copy the example
 cp .env.example .env
 ```
 
-`ENVIRONMENT` is the only required setting (defaults to `development` in the example file) — the backend fails fast at startup if `.env` is missing or `ENVIRONMENT` isn't set. See `.env.example` for the full list.
+`ENVIRONMENT` and `CAMERA_CREDENTIAL_ENCRYPTION_KEY` are required — the backend fails fast at startup if `.env` is missing or either is unset. `ENVIRONMENT` defaults to `development` in the example file; `CAMERA_CREDENTIAL_ENCRYPTION_KEY` has no default (it's the key camera passwords are encrypted with at rest — TD-15, TD-18) and must be generated per machine:
+
+```bash
+python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+Paste the output into `.env` as `CAMERA_CREDENTIAL_ENCRYPTION_KEY=...`. See `.env.example` for the full list of settings.
 
 ### Step 4 — Run the backend
 
