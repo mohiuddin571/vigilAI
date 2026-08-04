@@ -110,6 +110,8 @@ This repository is documentation-first: the design was fully specified before im
 
 | Document | What it covers |
 |---|---|
+| [AGENTS.md](./AGENTS.md) | How to work in this repository — conventions, standards, PR/commit rules, rules for AI assistants |
+| [TASKS.md](./TASKS.md) | Living implementation checklist (Completed / In Progress / Remaining) |
 | [AI_PROJECT_CONTEXT.md](./docs/AI_PROJECT_CONTEXT.md) | Full project context — start here if you're new (human or AI) |
 | [ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Component responsibilities, diagrams, key flows, technology rationale |
 | [FOLDER_STRUCTURE.md](./docs/FOLDER_STRUCTURE.md) | Repo layout, folder ownership, dependency direction rules |
