@@ -4,7 +4,7 @@ A Video Management System (VMS) with integrated video analytics: ONVIF camera on
 
 Built as a production-quality prototype demonstrating Clean Architecture applied to a real-time video/AI system.
 
-> **Status**: 🚧 M0 (Project Scaffolding & Tooling), M1 (Domain & Application Core), M2 (Frame Source Abstraction), M3 (ONVIF Camera Onboarding), M4 (ONVIF Configuration), and M5 (Live Streaming + Auto-Reconnect) complete. Next up: M6 (Recording). See [Project State](./docs/AI_PROJECT_CONTEXT.md#9-project-state).
+> **Status**: 🚧 M0 (Project Scaffolding & Tooling), M1 (Domain & Application Core), M2 (Frame Source Abstraction), M3 (ONVIF Camera Onboarding), M4 (ONVIF Configuration), M5 (Live Streaming + Auto-Reconnect), M6 (Recording), and M7 (Playback) complete. Next up: M8 (Analytics Pipeline Foundation). See [Project State](./docs/AI_PROJECT_CONTEXT.md#9-project-state).
 
 ---
 
@@ -78,7 +78,7 @@ Skip anything you already have installed.
 | Git | `git --version` | `brew install git` |
 | [`uv`](https://docs.astral.sh/uv/) (Python 3.12 + backend deps) | `uv --version` | `brew install uv` |
 | Node.js 22.12+ (frontend) | `node --version` | `brew install nvm` then `nvm install --lts && nvm use --lts` |
-| FFmpeg | `ffmpeg -version` | `brew install ffmpeg` — **required from M5 onward**: `OnvifRtspFrameSource`/`RawRtspFrameSource` decode RTSP via OpenCV's bundled FFmpeg backend (no separate runtime dependency), but the `ffmpeg` CLI itself is needed as a dev/test tool to serve a local test RTSP stream (e.g. from the sample MP4 fixture) when validating live view/reconnect without the physical camera — see [TECHNICAL_DECISIONS.md](./docs/TECHNICAL_DECISIONS.md) TD-21 |
+| FFmpeg | `ffmpeg -version` | `brew install ffmpeg` — a genuine runtime dependency from **M6 onward**: the Recording Worker invokes the `ffmpeg` CLI directly as a subprocess for stream-copy segment muxing, and `ffprobe` to verify/measure finalized segments (TD-04, TD-22). Before M6, it was needed only as a dev/test tool to serve a local test RTSP stream when validating live view/reconnect without the physical camera (`OnvifRtspFrameSource`/`RawRtspFrameSource` decode RTSP via OpenCV's bundled FFmpeg backend, a separate code path — TD-21) |
 
 `uv` and `nvm` manage their own tool versions per-project, so you don't need to separately install Python or pin a global Node version.
 

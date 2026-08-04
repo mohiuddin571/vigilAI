@@ -15,6 +15,10 @@ class IRecordingRepository(ABC):
     async def get(self, recording_id: UUID) -> Recording | None: ...
 
     @abstractmethod
+    async def update(self, recording: Recording) -> None:
+        """Persist changes to an already-added `Recording` (e.g. finalizing an in-progress row)."""
+
+    @abstractmethod
     async def list(
         self,
         camera_id: UUID | None = None,

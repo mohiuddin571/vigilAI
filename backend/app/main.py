@@ -9,6 +9,7 @@ from app.core.container import Container
 from app.core.exception_handlers import register_exception_handlers
 from app.core.logging import configure_logging
 from app.interfaces.api.cameras import create_cameras_router
+from app.interfaces.api.recordings import create_recordings_router
 from app.interfaces.api.stream_debug import create_stream_debug_router
 from app.interfaces.api.streams import create_streams_router
 from app.interfaces.websocket.stream_status import create_stream_status_router
@@ -57,6 +58,14 @@ app.include_router(
     create_stream_status_router(
         container.build_start_live_stream_use_case,
         poll_interval_seconds=settings.stream_status_poll_interval_seconds,
+    )
+)
+app.include_router(
+    create_recordings_router(
+        container.build_start_recording_use_case,
+        container.build_stop_recording_use_case,
+        container.build_list_recordings_use_case,
+        container.build_get_recording_use_case,
     )
 )
 

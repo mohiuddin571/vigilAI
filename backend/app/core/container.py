@@ -22,15 +22,23 @@ running Stream Workers across requests).
 
 import functools
 from pathlib import Path
+from uuid import UUID
 
 from app.application.ports.camera_gateway import ICameraGateway
 from app.application.ports.camera_repository import ICameraRepository
+from app.application.ports.recording_repository import IRecordingRepository
+from app.application.ports.recording_worker import IRecordingWorker
 from app.application.use_cases.debug_stream import DebugStreamUseCase
 from app.application.use_cases.get_camera import GetCameraUseCase
 from app.application.use_cases.get_camera_config import GetCameraConfigUseCase
+from app.application.use_cases.get_recording import GetRecordingUseCase
 from app.application.use_cases.list_cameras import ListCamerasUseCase
+from app.application.use_cases.list_recordings import ListRecordingsUseCase
 from app.application.use_cases.onboard_camera import OnboardCameraUseCase
+from app.application.use_cases.recording_session_registry import RecordingSessionRegistry
 from app.application.use_cases.start_live_stream import StartLiveStreamUseCase
+from app.application.use_cases.start_recording import StartRecordingUseCase
+from app.application.use_cases.stop_recording import StopRecordingUseCase
 from app.application.use_cases.update_camera_config import UpdateCameraConfigUseCase
 from app.application.use_cases.update_camera_rtsp_override import UpdateCameraRtspOverrideUseCase
 from app.core.config import Settings
@@ -38,9 +46,11 @@ from app.domain.entities.camera import Camera
 from app.domain.entities.stream_profile import StreamProfile
 from app.infrastructure.onvif.onvif_camera_gateway import OnvifCameraGateway
 from app.infrastructure.persistence.database import build_engine, build_session_factory, init_db
+from app.infrastructure.persistence.recording_repository import SqlRecordingRepository
 from app.infrastructure.persistence.sql_camera_repository import SqlCameraRepository
 from app.infrastructure.security.credential_cipher import CredentialCipher
 from app.infrastructure.streaming.mp4_frame_source import Mp4FileFrameSource
+from app.infrastructure.streaming.recording_worker import FfmpegRecordingWorker
 from app.infrastructure.streaming.rtsp_frame_source import OnvifRtspFrameSource
 from app.infrastructure.streaming.stream_worker import StreamWorker
 
@@ -59,6 +69,9 @@ class Container:
         self._camera_repository: ICameraRepository = SqlCameraRepository(
             self._session_factory, self._cipher
         )
+        self._recording_repository: IRecordingRepository = SqlRecordingRepository(
+            self._session_factory
+        )
         self._debug_stream_use_case = DebugStreamUseCase(
             build_worker=self._build_debug_stream_worker
         )
@@ -66,6 +79,18 @@ class Container:
             camera_gateway_factory=self.build_camera_gateway,
             camera_repository=self.build_camera_repository(),
             build_stream_worker=self._build_live_stream_worker,
+        )
+        self._recording_session_registry = RecordingSessionRegistry()
+        self._start_recording_use_case = StartRecordingUseCase(
+            camera_gateway_factory=self.build_camera_gateway,
+            camera_repository=self.build_camera_repository(),
+            recording_repository=self.build_recording_repository(),
+            registry=self._recording_session_registry,
+            build_recording_worker=self._build_recording_worker,
+        )
+        self._stop_recording_use_case = StopRecordingUseCase(
+            recording_repository=self.build_recording_repository(),
+            registry=self._recording_session_registry,
         )
 
     async def init_db(self) -> None:
@@ -96,6 +121,43 @@ class Container:
 
     def build_update_camera_rtsp_override_use_case(self) -> UpdateCameraRtspOverrideUseCase:
         return UpdateCameraRtspOverrideUseCase(self.build_camera_repository())
+
+    def build_recording_repository(self) -> IRecordingRepository:
+        return self._recording_repository
+
+    def _build_recording_worker(self, camera_id: UUID, rtsp_url: str) -> IRecordingWorker:
+        # No `multiprocessing`/picklability constraint here (unlike
+        # `_build_live_stream_worker`): ffmpeg is already the isolated OS
+        # process, so `rtsp_url` (resolved once by `StartRecordingUseCase`)
+        # is passed straight through as a plain constructor argument.
+        return FfmpegRecordingWorker(
+            camera_id=camera_id,
+            rtsp_url=rtsp_url,
+            output_dir=self._settings.recording_output_dir,
+            segment_duration_seconds=self._settings.recording_segment_duration_seconds,
+            ffmpeg_binary_path=self._settings.ffmpeg_binary_path,
+            ffprobe_binary_path=self._settings.ffprobe_binary_path,
+        )
+
+    def build_start_recording_use_case(self) -> StartRecordingUseCase:
+        """Returns the single shared `StartRecordingUseCase` instance (T-062).
+
+        Like `build_start_live_stream_use_case`, must be a singleton: it
+        shares a `RecordingSessionRegistry` with `build_stop_recording_use_case`
+        that tracks running ffmpeg subprocesses across requests.
+        """
+        return self._start_recording_use_case
+
+    def build_stop_recording_use_case(self) -> StopRecordingUseCase:
+        """Returns the single shared `StopRecordingUseCase` instance (T-062). See
+        `build_start_recording_use_case`'s docstring for why."""
+        return self._stop_recording_use_case
+
+    def build_list_recordings_use_case(self) -> ListRecordingsUseCase:
+        return ListRecordingsUseCase(self.build_recording_repository())
+
+    def build_get_recording_use_case(self) -> GetRecordingUseCase:
+        return GetRecordingUseCase(self.build_recording_repository())
 
     def _build_live_stream_worker(self, camera: Camera, profile: StreamProfile) -> StreamWorker:
         # Plain str/int args only (picklable), same `functools.partial` shape
