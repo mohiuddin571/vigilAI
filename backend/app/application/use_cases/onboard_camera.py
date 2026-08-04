@@ -24,7 +24,12 @@ class OnboardCameraUseCase:
         self._camera_repository = camera_repository
 
     async def execute(
-        self, ip_address: str, username: str, password: str, port: int = 80
+        self,
+        ip_address: str,
+        username: str,
+        password: str,
+        port: int = 80,
+        rtsp_url_override: str | None = None,
     ) -> Camera:
         try:
             await self._camera_gateway.connect(ip_address, username, password, port)
@@ -43,6 +48,7 @@ class OnboardCameraUseCase:
             username=username,
             port=port,
             password=password,
+            rtsp_url_override=rtsp_url_override,
             manufacturer=device_info.manufacturer,
             model=device_info.model,
             firmware_version=device_info.firmware_version,

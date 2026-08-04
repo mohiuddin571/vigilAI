@@ -18,9 +18,10 @@ node_modules/
 frontend/dist/
 npm-debug.log*
 
-# Storage (recordings, model weights — gitignored per FOLDER_STRUCTURE.md)
+# Storage (recordings, model weights, local runtime DB — gitignored per FOLDER_STRUCTURE.md)
 storage/recordings/
 storage/models/
+storage/db/
 
 # Editors
 .vscode/

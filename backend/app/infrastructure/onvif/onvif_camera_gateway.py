@@ -20,14 +20,24 @@ from app.infrastructure.onvif.mappers import (
 class OnvifCameraGateway(ICameraGateway):
     """`ICameraGateway` implementation wrapping `onvif-zeep-async` (TD-03).
 
-    `connect`, `get_device_info`, `get_profiles` (M3), and
+    `connect`, `get_device_info`, `get_profiles` (M3);
     `get_video_encoder_configuration`/`set_video_encoder_configuration`/
-    `get_video_encoder_configuration_options` (M4) have real logic;
-    `get_stream_uri` (M5) is a stub body only.
+    `get_video_encoder_configuration_options` (M4); and `get_stream_uri`
+    (M5, resolving `GetStreamUri` for RTSP live-view) all have real logic.
 
     `client_factory` defaults to the real `ONVIFCamera` constructor and exists
     so integration tests can inject a fixture-driven fake without a real
     camera or a protocol-level SOAP simulator (see docs/TASK_BACKLOG.md T-037).
+
+    Every multi-field SOAP call below passes its parameters as a single dict
+    positional argument (e.g. `media.GetStreamUri({"StreamSetup": ..., "ProfileToken": ...})`),
+    never as separate top-level kwargs — `onvif.ONVIFService.__getattr__`'s
+    `wrapped(params=None)` only accepts one `params` argument itself (which it
+    then unpacks into the underlying SOAP call), so `media.Op(A=..., B=...)`
+    fails with "unexpected keyword argument" against the real library even
+    though it type-checks fine against a hand-written fake. Confirmed against
+    real hardware (docs/TECHNICAL_DECISIONS.md TD-22) — this is exactly the gap
+    TD-18 flagged as a limitation of fixture-only ONVIF testing.
     """
 
     def __init__(self, client_factory: Callable[..., Any] = ONVIFCamera) -> None:
@@ -51,7 +61,19 @@ class OnvifCameraGateway(ICameraGateway):
         # against real hardware: a Matrix MIDR20FL28CWS returned a "Password
         # Mismatch" fault for valid credentials until this flag was added).
         # This has the client measure and compensate for the offset first.
-        self._camera = self._client_factory(ip_address, port, username, password, adjust_time=True)
+        # Assessment cameras may be reachable through a public port-forward
+        # while advertising their private-LAN XAddrs in GetServices or
+        # GetCapabilities.  Tell the ONVIF client to retain the configured
+        # host/port for those service URLs instead of following an unreachable
+        # advertised LAN address.  This is a no-op for a direct LAN connection.
+        self._camera = self._client_factory(
+            ip_address,
+            port,
+            username,
+            password,
+            adjust_time=True,
+            nat_override=True,
+        )
         try:
             await self._camera.update_xaddrs()
         except Exception as exc:
@@ -83,7 +105,9 @@ class OnvifCameraGateway(ICameraGateway):
             config_token = await encoder_config.resolve_video_encoder_configuration_token(
                 media, profile_id
             )
-            raw_config = await media.GetVideoEncoderConfiguration(ConfigurationToken=config_token)
+            raw_config = await media.GetVideoEncoderConfiguration(
+                {"ConfigurationToken": config_token}
+            )
         except DomainError:
             raise
         except Exception as exc:
@@ -106,9 +130,11 @@ class OnvifCameraGateway(ICameraGateway):
             config_token = await encoder_config.resolve_video_encoder_configuration_token(
                 media, profile_id
             )
-            raw_config = await media.GetVideoEncoderConfiguration(ConfigurationToken=config_token)
+            raw_config = await media.GetVideoEncoderConfiguration(
+                {"ConfigurationToken": config_token}
+            )
             raw_options = await media.GetVideoEncoderConfigurationOptions(
-                ConfigurationToken=config_token, ProfileToken=profile_id
+                {"ConfigurationToken": config_token, "ProfileToken": profile_id}
             )
         except DomainError:
             raise
@@ -129,7 +155,7 @@ class OnvifCameraGateway(ICameraGateway):
 
         try:
             await media.SetVideoEncoderConfiguration(
-                Configuration=raw_config, ForcePersistence=True
+                {"Configuration": raw_config, "ForcePersistence": True}
             )
         except Exception as exc:
             # Our own pre-validation above should catch most rejections, but the
@@ -147,9 +173,11 @@ class OnvifCameraGateway(ICameraGateway):
             config_token = await encoder_config.resolve_video_encoder_configuration_token(
                 media, profile_id
             )
-            raw_config = await media.GetVideoEncoderConfiguration(ConfigurationToken=config_token)
+            raw_config = await media.GetVideoEncoderConfiguration(
+                {"ConfigurationToken": config_token}
+            )
             raw_options = await media.GetVideoEncoderConfigurationOptions(
-                ConfigurationToken=config_token, ProfileToken=profile_id
+                {"ConfigurationToken": config_token, "ProfileToken": profile_id}
             )
         except DomainError:
             raise
@@ -165,7 +193,24 @@ class OnvifCameraGateway(ICameraGateway):
         return encoder_config.map_video_encoder_configuration_options(raw_options, codec)
 
     async def get_stream_uri(self, profile_id: str) -> str:
-        raise NotImplementedError
+        self._require_connected()
+        try:
+            media = await self._camera.create_media_service()
+            response = await media.GetStreamUri(
+                {
+                    "StreamSetup": {"Stream": "RTP-Unicast", "Transport": {"Protocol": "RTSP"}},
+                    "ProfileToken": profile_id,
+                }
+            )
+        except Exception as exc:
+            raise classify_onvif_error(exc) from exc
+
+        uri = getattr(response, "Uri", None)
+        if not uri:
+            raise CameraUnreachableError(
+                f"Camera did not return a stream URI for profile {profile_id!r}"
+            )
+        return str(uri)
 
     async def disconnect(self) -> None:
         if self._camera is not None:

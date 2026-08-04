@@ -1,9 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { listCameras } from '../../services/camerasApi';
+import { listCameras, updateCameraRtspUrl } from '../../services/camerasApi';
 import ConfigPanel from './ConfigPanel';
 
 function CameraList() {
+  const queryClient = useQueryClient();
   const { data, isLoading, isError } = useQuery({
     queryKey: ['cameras'],
     queryFn: listCameras,
@@ -11,6 +12,12 @@ function CameraList() {
   const [openProfile, setOpenProfile] = useState<{ cameraId: string; profileId: string } | null>(
     null,
   );
+  const [rtspOverrides, setRtspOverrides] = useState<Record<string, string>>({});
+  const updateRtspMutation = useMutation({
+    mutationFn: ({ cameraId, value }: { cameraId: string; value: string | null }) =>
+      updateCameraRtspUrl(cameraId, value),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['cameras'] }),
+  });
 
   if (isLoading) return <p className="text-sm text-slate-500">Loading cameras…</p>;
   if (isError) return <p className="text-sm text-red-600">Failed to load cameras.</p>;
@@ -33,6 +40,30 @@ function CameraList() {
             {camera.ip_address}:{camera.port} — {camera.manufacturer ?? 'Unknown manufacturer'}{' '}
             {camera.model ?? ''}
           </p>
+          <div className="mt-2 flex gap-2">
+            <input
+              aria-label={`Public RTSP URL for ${camera.name}`}
+              className="min-w-0 flex-1 rounded border border-slate-300 px-2 py-1 text-xs"
+              value={rtspOverrides[camera.id] ?? camera.rtsp_url_override ?? ''}
+              onChange={(event) =>
+                setRtspOverrides({ ...rtspOverrides, [camera.id]: event.target.value })
+              }
+              placeholder="Public RTSP URL override"
+            />
+            <button
+              type="button"
+              className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-700"
+              disabled={updateRtspMutation.isPending}
+              onClick={() =>
+                updateRtspMutation.mutate({
+                  cameraId: camera.id,
+                  value: (rtspOverrides[camera.id] ?? camera.rtsp_url_override ?? '') || null,
+                })
+              }
+            >
+              Save RTSP
+            </button>
+          </div>
           <ul className="mt-1 space-y-1">
             {camera.stream_profiles.map((profile) => {
               const isOpen =

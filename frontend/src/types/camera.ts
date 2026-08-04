@@ -6,6 +6,7 @@ export interface CameraCreateRequest {
   port?: number;
   username: string;
   password: string;
+  rtsp_url_override?: string | null;
 }
 
 export interface StreamProfileResponse {
@@ -25,6 +26,7 @@ export interface CameraResponse {
   ip_address: string;
   port: number;
   username: string;
+  rtsp_url_override: string | null;
   manufacturer: string | null;
   model: string | null;
   firmware_version: string | null;

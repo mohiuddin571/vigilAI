@@ -4,7 +4,7 @@ A Video Management System (VMS) with integrated video analytics: ONVIF camera on
 
 Built as a production-quality prototype demonstrating Clean Architecture applied to a real-time video/AI system.
 
-> **Status**: 🚧 M0 (Project Scaffolding & Tooling), M1 (Domain & Application Core), M3 (ONVIF Camera Onboarding), M4 (ONVIF Configuration), and M2 (Frame Source Abstraction) complete. Next up: M5 (Live Streaming + Auto-Reconnect). See [Project State](./docs/AI_PROJECT_CONTEXT.md#9-project-state).
+> **Status**: 🚧 M0 (Project Scaffolding & Tooling), M1 (Domain & Application Core), M2 (Frame Source Abstraction), M3 (ONVIF Camera Onboarding), M4 (ONVIF Configuration), and M5 (Live Streaming + Auto-Reconnect) complete. Next up: M6 (Recording). See [Project State](./docs/AI_PROJECT_CONTEXT.md#9-project-state).
 
 ---
 
@@ -78,7 +78,7 @@ Skip anything you already have installed.
 | Git | `git --version` | `brew install git` |
 | [`uv`](https://docs.astral.sh/uv/) (Python 3.12 + backend deps) | `uv --version` | `brew install uv` |
 | Node.js 22.12+ (frontend) | `node --version` | `brew install nvm` then `nvm install --lts && nvm use --lts` |
-| FFmpeg | `ffmpeg -version` | `brew install ffmpeg` — **not needed yet**, only from M5 onward (M2's `Mp4FileFrameSource` uses OpenCV only; FFmpeg is TD-04's choice for RTSP ingestion/recording) |
+| FFmpeg | `ffmpeg -version` | `brew install ffmpeg` — **required from M5 onward**: `OnvifRtspFrameSource`/`RawRtspFrameSource` decode RTSP via OpenCV's bundled FFmpeg backend (no separate runtime dependency), but the `ffmpeg` CLI itself is needed as a dev/test tool to serve a local test RTSP stream (e.g. from the sample MP4 fixture) when validating live view/reconnect without the physical camera — see [TECHNICAL_DECISIONS.md](./docs/TECHNICAL_DECISIONS.md) TD-21 |
 
 `uv` and `nvm` manage their own tool versions per-project, so you don't need to separately install Python or pin a global Node version.
 
@@ -146,9 +146,22 @@ curl http://localhost:8000/debug/streams/mp4/status   # state, and the latest fr
 curl -X POST http://localhost:8000/debug/streams/mp4/stop
 ```
 
-`status` should move from `"connecting"` to `"connected"`, with `latest_frame.sequence` increasing on repeated calls at roughly the fixture's frame rate. This is dev/demo tooling proving the frame source + reconnect-supervised Stream Worker work (T-025) — it's not the real browser live-view, which lands with M5 (MJPEG-over-HTTP against a resolved camera stream).
+`status` should move from `"connecting"` to `"connected"`, with `latest_frame.sequence` increasing on repeated calls at roughly the fixture's frame rate. This is dev/demo tooling proving the frame source + reconnect-supervised Stream Worker work (T-025) — it's not the real browser live-view (Step 7 below), which goes over MJPEG-over-HTTP against a resolved camera stream.
 
 Note: `backend/tests/fixtures/sample.mp4` is a synthetically generated clip (`scripts/generate_sample_fixture.py`), not real footage — see [TECHNICAL_DECISIONS.md](./docs/TECHNICAL_DECISIONS.md) TD-20 for why, and for the known limitation this leaves for later analytics milestones (M9+).
+
+### Step 7 — Live view of an onboarded camera (M5, needs a real or ONVIF-simulator camera)
+
+With a camera onboarded (via the frontend's "Add Camera" form, or `POST /cameras` directly — see M3 above), open the frontend (Step 5) — the "Live View" card lists onboarded cameras and shows an `<img>`-based MJPEG preview with a connected/reconnecting/failed indicator once you click **Connect**. Equivalently, from the API directly:
+
+```bash
+curl -X POST http://localhost:8000/streams/{camera_id}/start
+curl http://localhost:8000/streams/{camera_id}/status
+# open http://localhost:8000/streams/{camera_id}/mjpeg directly in a browser tab
+curl -X POST http://localhost:8000/streams/{camera_id}/stop
+```
+
+The status WebSocket (`ws://localhost:8000/ws/streams/{camera_id}/status`) pushes the same status roughly once a second — this is what the frontend's connection indicator subscribes to. To see the reconnect behavior described in [TECHNICAL_DECISIONS.md](./docs/TECHNICAL_DECISIONS.md) TD-21, interrupt the camera's network path (or kill a local test RTSP stream) while connected and watch `status`/the WS channel move to `"reconnecting"` and back to `"connected"`.
 
 ### Stopping the app
 

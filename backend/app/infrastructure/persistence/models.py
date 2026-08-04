@@ -18,6 +18,7 @@ class CameraRow(SQLModel, table=True):
     port: int
     username: str
     encrypted_password: str
+    rtsp_url_override: str | None = None
     manufacturer: str | None = None
     model: str | None = None
     firmware_version: str | None = None

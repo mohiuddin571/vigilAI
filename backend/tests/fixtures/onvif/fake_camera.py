@@ -55,6 +55,12 @@ class _FakeMediaService:
     """Stateful enough that `SetVideoEncoderConfiguration` is reflected by a
     subsequent `GetVideoEncoderConfiguration`/`GetProfiles` call, matching the
     real camera's read-your-writes behavior M4's acceptance criteria depend on.
+
+    Every multi-field method takes a single positional `params` dict, matching
+    `onvif.ONVIFService.__getattr__`'s real `wrapped(params=None)` contract
+    (confirmed against real hardware — docs/TECHNICAL_DECISIONS.md TD-22) —
+    not separate top-level kwargs, which the real library rejects even though
+    an earlier, kwargs-shaped version of this fake didn't catch that mismatch.
     """
 
     def __init__(
@@ -62,31 +68,33 @@ class _FakeMediaService:
         profiles: list[Any],
         video_encoder_configs: dict[str, Any],
         video_encoder_options: dict[str, Any],
+        stream_uri: str = "rtsp://camera.invalid:554/stream1",
     ) -> None:
         self._profiles = profiles
         self._video_encoder_configs = video_encoder_configs
         self._video_encoder_options = video_encoder_options
+        self._stream_uri = stream_uri
 
     async def GetProfiles(self) -> list[Any]:
         return self._profiles
 
-    async def GetVideoEncoderConfiguration(self, ConfigurationToken: str) -> Any:
-        return self._video_encoder_configs[ConfigurationToken]
+    async def GetStreamUri(self, params: dict[str, Any]) -> Any:
+        return SimpleNamespace(Uri=self._stream_uri)
 
-    async def GetVideoEncoderConfigurationOptions(
-        self, ConfigurationToken: str | None = None, ProfileToken: str | None = None
-    ) -> Any:
-        return self._video_encoder_options[str(ConfigurationToken)]
+    async def GetVideoEncoderConfiguration(self, params: dict[str, Any]) -> Any:
+        return self._video_encoder_configs[params["ConfigurationToken"]]
 
-    async def SetVideoEncoderConfiguration(
-        self, Configuration: Any, ForcePersistence: bool = True
-    ) -> None:
-        token = Configuration.token
-        self._video_encoder_configs[token] = Configuration
+    async def GetVideoEncoderConfigurationOptions(self, params: dict[str, Any]) -> Any:
+        return self._video_encoder_options[str(params["ConfigurationToken"])]
+
+    async def SetVideoEncoderConfiguration(self, params: dict[str, Any]) -> None:
+        configuration = params["Configuration"]
+        token = configuration.token
+        self._video_encoder_configs[token] = configuration
         for profile in self._profiles:
             enc_config = getattr(profile, "VideoEncoderConfiguration", None)
             if enc_config is not None and getattr(enc_config, "token", None) == token:
-                profile.VideoEncoderConfiguration = Configuration
+                profile.VideoEncoderConfiguration = configuration
 
 
 class FakeOnvifCamera:
@@ -100,16 +108,20 @@ class FakeOnvifCamera:
         passwd: str,
         *,
         adjust_time: bool = False,
+        nat_override: bool = False,
         device_information: Any | None = None,
         profiles: list[Any] | None = None,
         video_encoder_configs: dict[str, Any] | None = None,
         video_encoder_options: dict[str, Any] | None = None,
+        stream_uri: str = "rtsp://camera.invalid:554/stream1",
         fail_with: Exception | None = None,
     ) -> None:
         self.host = host
         self.port = port
         self.user = user
         self.passwd = passwd
+        self.adjust_time = adjust_time
+        self.nat_override = nat_override
         self._device_information = (
             device_information if device_information is not None else load_device_information()
         )
@@ -124,6 +136,7 @@ class FakeOnvifCamera:
             if video_encoder_options is not None
             else load_video_encoder_configuration_options()
         )
+        self._stream_uri = stream_uri
         self._fail_with = fail_with
 
     async def update_xaddrs(self) -> None:
@@ -135,7 +148,10 @@ class FakeOnvifCamera:
 
     async def create_media_service(self) -> _FakeMediaService:
         return _FakeMediaService(
-            self._profiles, self._video_encoder_configs, self._video_encoder_options
+            self._profiles,
+            self._video_encoder_configs,
+            self._video_encoder_options,
+            self._stream_uri,
         )
 
     async def close(self) -> None:

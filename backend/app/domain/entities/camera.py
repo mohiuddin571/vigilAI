@@ -16,6 +16,7 @@ class Camera:
     id: UUID = field(default_factory=uuid4)
     port: int = 80
     password: str = field(default="", repr=False)
+    rtsp_url_override: str | None = field(default=None, repr=False)
     manufacturer: str | None = None
     model: str | None = None
     firmware_version: str | None = None

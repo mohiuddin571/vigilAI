@@ -14,7 +14,7 @@ export class ApiError extends Error {
   }
 }
 
-async function parseErrorDetail(response: Response): Promise<string> {
+export async function parseErrorDetail(response: Response): Promise<string> {
   try {
     const body = (await response.json()) as { detail?: string };
     return body.detail ?? `Request failed with status ${response.status}`;
@@ -36,6 +36,21 @@ export async function createCamera(payload: CameraCreateRequest): Promise<Camera
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new ApiError(await parseErrorDetail(response), response.status);
+  }
+  return (await response.json()) as CameraResponse;
+}
+
+export async function updateCameraRtspUrl(
+  cameraId: string,
+  rtspUrlOverride: string | null,
+): Promise<CameraResponse> {
+  const response = await fetch(`/cameras/${cameraId}/rtsp-url`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rtsp_url_override: rtspUrlOverride }),
   });
   if (!response.ok) {
     throw new ApiError(await parseErrorDetail(response), response.status);

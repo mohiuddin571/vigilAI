@@ -10,6 +10,8 @@ from app.core.exception_handlers import register_exception_handlers
 from app.core.logging import configure_logging
 from app.interfaces.api.cameras import create_cameras_router
 from app.interfaces.api.stream_debug import create_stream_debug_router
+from app.interfaces.api.streams import create_streams_router
+from app.interfaces.websocket.stream_status import create_stream_status_router
 
 configure_logging()
 
@@ -40,9 +42,23 @@ app.include_router(
         build_get_camera_use_case=container.build_get_camera_use_case,
         build_get_camera_config_use_case=container.build_get_camera_config_use_case,
         build_update_camera_config_use_case=container.build_update_camera_config_use_case,
+        build_update_camera_rtsp_override_use_case=container.build_update_camera_rtsp_override_use_case,
     )
 )
 app.include_router(create_stream_debug_router(container.build_debug_stream_use_case()))
+app.include_router(
+    create_streams_router(
+        container.build_start_live_stream_use_case,
+        mjpeg_boundary=settings.mjpeg_boundary,
+        mjpeg_jpeg_quality=settings.mjpeg_jpeg_quality,
+    )
+)
+app.include_router(
+    create_stream_status_router(
+        container.build_start_live_stream_use_case,
+        poll_interval_seconds=settings.stream_status_poll_interval_seconds,
+    )
+)
 
 
 @app.get("/health")

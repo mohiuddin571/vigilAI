@@ -132,9 +132,9 @@ If a future prompt seems to ask for one of these, confirm scope before building 
 
 > Update this section as work progresses. Future AI sessions should read this before assuming anything about what exists.
 
-- **Current milestone**: Not started — planning/documentation phase complete as of 2026-08-04.
-- **What exists**: `AI_PROJECT_CONTEXT.md`, `ARCHITECTURE.md`, `FOLDER_STRUCTURE.md`, `IMPLEMENTATION_PLAN.md`, `PROMPTING_GUIDE.md`, `README.md`, `TECHNICAL_DECISIONS.md`, `TASK_BACKLOG.md`. No application code yet.
-- **What's next**: Milestone M0 (project scaffolding) per [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md).
+- **Current milestone**: M0–M5 complete (scaffolding, domain/application core, frame source abstraction, ONVIF onboarding/config, live streaming + auto-reconnect). See [TASKS.md](../TASKS.md) for the live checklist — this section is a coarser summary and can lag it briefly.
+- **What exists**: The full documentation set, plus a working backend (`backend/app/`) and frontend (`frontend/src/`) implementing M0–M5's deliverables — camera onboarding/config over ONVIF, the `IFrameSource`/`IStreamWorker` abstractions, MP4 and RTSP frame sources, and browser live view (MJPEG + WS status) with automatic reconnect.
+- **What's next**: Milestone M6 (Recording) per [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md).
 - **Known open questions**: exact make/model of the evaluator-provided ONVIF camera is unknown until evaluation day — onboarding/config-read/config-update code should be validated against ONVIF's spec plus a mock/test camera or camera simulator, not assumptions about one vendor's quirks.
 
 ---
