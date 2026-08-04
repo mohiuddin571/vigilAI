@@ -7,6 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/health': 'http://localhost:8000',
+      '/cameras': 'http://localhost:8000',
     },
   },
 })

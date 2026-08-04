@@ -19,5 +19,13 @@ class CameraUnreachableError(DomainError):
     """A camera could not be reached over the network."""
 
 
+class CameraAuthenticationError(DomainError):
+    """A camera rejected the supplied credentials."""
+
+
+class CameraNotFoundError(DomainError):
+    """No onboarded camera exists for the given identifier."""
+
+
 class UnsupportedConfigurationError(DomainError):
     """A requested camera configuration change is not supported by the camera."""

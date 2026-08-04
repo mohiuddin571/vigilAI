@@ -35,7 +35,15 @@ jobs:
         run: uv run lint-imports
 
       - name: Pytest
+        # ENVIRONMENT/CAMERA_CREDENTIAL_ENCRYPTION_KEY: M3's integration tests
+        # build the composition root, which instantiates Settings (TD-13) —
+        # there's no .env in CI (it's gitignored), so these must come from the
+        # job environment. The key here is CI-only and never used for real
+        # credentials; each developer generates their own for local `.env`.
         run: uv run pytest
+        env:
+          ENVIRONMENT: development
+          CAMERA_CREDENTIAL_ENCRYPTION_KEY: "Ajj431OAuadLObaWyK7E62xofPpQr_n0ck9eAE1Lczc="
 
   frontend:
     runs-on: ubuntu-latest

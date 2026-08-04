@@ -11,8 +11,12 @@ class ICameraGateway(ABC):
     """
 
     @abstractmethod
-    async def connect(self, ip_address: str, username: str, password: str) -> None:
-        """Authenticate against the camera. Raises CameraUnreachableError on failure."""
+    async def connect(self, ip_address: str, username: str, password: str, port: int = 80) -> None:
+        """Authenticate against the camera.
+
+        Raises CameraAuthenticationError if the credentials are rejected, or
+        CameraUnreachableError if the camera cannot be reached at all.
+        """
 
     @abstractmethod
     async def get_device_info(self) -> Camera:
@@ -38,3 +42,10 @@ class ICameraGateway(ABC):
     @abstractmethod
     async def get_stream_uri(self, profile_id: str) -> str:
         """Resolve a profile to its RTSP stream URL."""
+
+    @abstractmethod
+    async def disconnect(self) -> None:
+        """Release any resources held by an open connection.
+
+        Safe to call even if `connect` was never called, or failed.
+        """

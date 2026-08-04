@@ -14,6 +14,8 @@ class Camera:
     ip_address: str
     username: str
     id: UUID = field(default_factory=uuid4)
+    port: int = 80
+    password: str = field(default="", repr=False)
     manufacturer: str | None = None
     model: str | None = None
     firmware_version: str | None = None
