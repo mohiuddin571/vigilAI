@@ -23,6 +23,7 @@ Documentation precedes and governs implementation here, not the other way around
 - `README.md` — project entry point, stays at the repository root.
 - `AGENTS.md`, `TASKS.md` — repository operations (this file, and the living checklist), also at the root, since they're about *working in* the repo rather than the system it describes.
 - `docs/` — all architecture, planning, design, and AI-context documentation. See [docs/FOLDER_STRUCTURE.md](./docs/FOLDER_STRUCTURE.md) for the full repo layout, including the backend/frontend structure that gets built out milestone by milestone.
+- `prompts/` — reusable Claude Code prompt templates, one per milestone, plus the full AI development workflow. See [prompts/00-README.md](./prompts/00-README.md). Operational, like this file — not architecture documentation, so it also lives at the root rather than under `docs/`.
 - Don't create new root-level documents. If it's project documentation, it belongs in `docs/`; if it's operational (like this file), it belongs at the root alongside `README.md`.
 
 ## Coding Standards
@@ -41,6 +42,7 @@ New third-party dependencies are not free — adding one means adding or updatin
 - PR description states what changed and which acceptance criteria (from TASK_BACKLOG.md / IMPLEMENTATION_PLAN.md) it satisfies.
 - Keep diffs reviewable: implementation and unrelated cleanup/refactors go in separate PRs.
 - Update `TASKS.md` in the same PR when a milestone or checklist item moves between Completed / In Progress / Remaining.
+- Complete [prompts/99-pr-review-checklist.md](./prompts/99-pr-review-checklist.md) before opening the PR.
 
 ## Commit Message Conventions
 

@@ -12,6 +12,7 @@ Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./
 - [x] Implementation plan & task backlog (`docs/IMPLEMENTATION_PLAN.md`, `docs/TASK_BACKLOG.md`)
 - [x] Documentation organized into `docs/`, README kept at root
 - [x] AI agent workflow docs (`AGENTS.md`, `TASKS.md`)
+- [x] AI prompt workflow templates (`prompts/`)
 
 # In Progress
 
