@@ -8,10 +8,12 @@ from app.core.config import settings
 from app.core.container import Container
 from app.core.exception_handlers import register_exception_handlers
 from app.core.logging import configure_logging
+from app.interfaces.api.analytics import create_analytics_router
 from app.interfaces.api.cameras import create_cameras_router
 from app.interfaces.api.recordings import create_recordings_router
 from app.interfaces.api.stream_debug import create_stream_debug_router
 from app.interfaces.api.streams import create_streams_router
+from app.interfaces.websocket.analytics_events import create_analytics_events_router
 from app.interfaces.websocket.stream_status import create_stream_status_router
 
 configure_logging()
@@ -68,6 +70,13 @@ app.include_router(
         container.build_get_recording_use_case,
     )
 )
+app.include_router(
+    create_analytics_router(
+        container.build_analytics_session_registry,
+        container.build_list_detection_events_use_case,
+    )
+)
+app.include_router(create_analytics_events_router(container.build_analytics_events_hub()))
 
 
 @app.get("/health")
