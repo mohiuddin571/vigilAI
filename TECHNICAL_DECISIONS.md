@@ -1,0 +1,245 @@
+# VigilAI — Technical Decisions
+
+> Companion documents: [ARCHITECTURE.md](./ARCHITECTURE.md) · [AI_PROJECT_CONTEXT.md](./AI_PROJECT_CONTEXT.md)
+
+Each entry is a lightweight ADR (Architecture Decision Record): **Decision → Context → Alternatives Considered → Tradeoffs → Future Enhancement**. Numbered for reference (e.g. "see TD-06"), not for chronology.
+
+---
+
+## TD-01: Clean Architecture with explicit ports
+
+**Decision**: Domain and Application layers depend on abstract interfaces (`ports`) only; Infrastructure implements them; wiring happens in one composition root.
+
+**Context**: The assignment explicitly penalizes tight coupling between analytics and ONVIF, and requires the analytics pipeline to run unchanged over ONVIF cameras, raw RTSP, and MP4 files.
+
+**Alternatives considered**:
+- *Transaction-script / "fat router" FastAPI app* — fastest to write, but analytics code would end up importing camera code directly, which is the exact coupling the assignment warns against.
+- *Django-style MVC* — heavier framework assumptions than needed for an API-only backend; FastAPI + Clean Architecture gives the same separation with less ceremony.
+
+**Tradeoffs**: More files and more indirection than a script would need; for a small prototype this can look like over-engineering. Accepted because the assignment is explicitly evaluating architecture, not line count.
+
+**Future enhancement**: Enforce the dependency rule automatically with `import-linter` (contracts forbidding `domain`/`application` from importing `infrastructure`/`interfaces`) as a CI gate rather than a convention.
+
+---
+
+## TD-02: FastAPI as the web framework
+
+**Decision**: FastAPI for REST + WebSocket.
+
+**Context**: Backend is Python; need async I/O for concurrent camera streams, native request validation, and live-view push.
+
+**Alternatives considered**: Flask (no native async/WS story, would need extensions), Django REST Framework (ORM and app-registry assumptions not needed here).
+
+**Tradeoffs**: FastAPI's dependency-injection (`Depends`) is convenient but is *not* used as the project's DI mechanism (see TD-08) — it's reserved for request-scoped concerns (auth, pagination) to avoid two competing DI systems.
+
+**Future enhancement**: None planned; framework choice is expected to hold through production.
+
+---
+
+## TD-03: ONVIF client library — `onvif-zeep-async`
+
+**Decision**: Use `onvif-zeep-async` for device authentication (WS-UsernameToken), device management, and media services.
+
+**Context**: Needed a Python ONVIF client that's async-native (fits the FastAPI/asyncio backend) and still maintained. Older `python-onvif-zeep`/`onvif-zeep` packages are effectively unmaintained.
+
+**Alternatives considered**:
+- *Raw SOAP via `zeep` against ONVIF WSDLs directly* — maximum control, no dependency risk, but reimplements what a client library already does; kept as documented fallback.
+- *WS-Discovery-first onboarding* (`wsdiscovery` package, broadcast-based) — appealing but many NVR/camera deployments live on routed networks where broadcast discovery doesn't reach; the assignment explicitly asks for IP/username/password auth, so discovery is a "nice to have," not the primary path.
+
+**Tradeoffs**: Dependency on a smaller third-party package (backed by the Home Assistant ONVIF integration user base, which is reassuring but not a guarantee). All ONVIF calls are isolated behind `ICameraGateway` — if the library needs to be replaced, only the infrastructure adapter changes.
+
+**Future enhancement**: Add optional WS-Discovery-based "scan my network" onboarding as a UI convenience once IP/credential onboarding is solid.
+
+---
+
+## TD-04: FFmpeg (subprocess) + OpenCV, not GStreamer
+
+**Decision**: FFmpeg handles RTSP ingestion for recording (stream copy, no re-encode) and browser-preview transcoding; OpenCV `VideoCapture`/`VideoWriter` handles frame-level decode for analytics and MP4 file playback.
+
+**Context**: Assignment mandates FFmpeg for streaming/recording and OpenCV "where appropriate."
+
+**Alternatives considered**: GStreamer (more powerful pipeline graph, but a much heavier dependency to install and reason about on a Mac Mini dev box, and not what the assignment asked for).
+
+**Tradeoffs**: Running FFmpeg as a subprocess means shelling out and parsing stderr for health/diagnostics rather than a native Python pipeline API — more manual process-lifecycle management, but transparent and debuggable (the exact command that runs is always visible in logs).
+
+**Future enhancement**: Wrap the subprocess construction behind a small internal builder if the number of FFmpeg invocation variants grows past a handful; not needed yet.
+
+---
+
+## TD-05: Process-per-stream concurrency model
+
+**Decision**: Each active camera/source's frame-grabbing loop runs in its own OS process (`multiprocessing`), communicating via a bounded, drop-oldest queue. The FastAPI process stays asyncio-only and never blocks on decode.
+
+**Context**: `cv2.VideoCapture.read()` and FFmpeg I/O are blocking calls; YOLO inference is CPU/GPU-bound. Both would stall an asyncio event loop or contend badly under Python's GIL if run as threads in-process.
+
+**Alternatives considered**:
+- *Threading* — simpler IPC (shared memory without serialization), but GIL contention between decode and inference threads limits throughput on multi-camera setups; a single misbehaving camera thread is also harder to hard-kill cleanly than a process.
+- *asyncio + `run_in_executor`* — fine for I/O-bound work, insufficient isolation for CPU-bound YOLO inference and doesn't protect against a hard camera-driver hang.
+
+**Tradeoffs**: `multiprocessing.Queue` serializes frames (pickling numpy arrays) which costs CPU and memory bandwidth compared to shared memory. Acceptable at the scale of a handful of cameras on a Mac Mini; would need revisiting at high camera counts.
+
+**Future enhancement**: Move to `multiprocessing.shared_memory` ring buffers for frame transport if profiling shows queue serialization is the bottleneck.
+
+---
+
+## TD-06: Object detection — Ultralytics YOLOv8 with built-in ByteTrack
+
+**Decision**: Use Ultralytics' pretrained YOLOv8 (COCO weights) for object detection/classification, and its bundled ByteTrack (`model.track()`) for the identity tracking that loitering detection needs.
+
+**Context**: Assignment mandates Ultralytics YOLO. Loitering detection needs per-object identity across frames, not just per-frame detection.
+
+**Alternatives considered**: DeepSORT (a separate dependency and re-ID model) — rejected because ByteTrack ships inside `ultralytics` already and performs comparably for this use case, avoiding an extra ML dependency.
+
+**Tradeoffs**: COCO pretrained classes are generic (person, car, truck, etc.) — good enough for the required demo scenarios, but won't recognize domain-specific objects (e.g. a specific piece of equipment) without fine-tuning.
+
+**Future enhancement**: Fine-tune or swap in a custom-trained model per deployment; the detector is behind `IObjectDetector`, so this is a model-file/adapter change, not an architecture change.
+
+---
+
+## TD-07: OCR engine for LPR — EasyOCR
+
+**Decision**: EasyOCR for plate text recognition, after a YOLO-based (or classical contour-based, as a lighter fallback) plate-region localizer.
+
+**Context**: License Plate Recognition needs a detect-then-read pipeline: find the plate region, then OCR it.
+
+**Alternatives considered**:
+- *PaddleOCR* — strong accuracy, but pulls in PaddlePaddle as a second deep-learning runtime alongside PyTorch (Ultralytics), doubling framework footprint and install complexity on the dev machine.
+- *Tesseract* — no extra deep-learning dependency, but materially worse accuracy on angled/low-res plate crops typical of surveillance footage.
+
+**Tradeoffs**: EasyOCR is heavier and slower than Tesseract per-crop; acceptable because LPR only runs on already-cropped, already-detected plate regions, not full frames.
+
+**Future enhancement**: Swap in a purpose-built ALPR model (e.g. a fine-tuned YOLO plate detector + a lightweight CRNN reader) if throughput or accuracy on the evaluation camera's real footage proves insufficient — isolated behind an `ILicensePlateReader` port.
+
+---
+
+## TD-08: Manual composition-root DI, not a DI framework
+
+**Decision**: One `app/core/container.py` module builds every concrete adapter and injects them into use cases via plain constructor arguments. FastAPI's `Depends` is reserved for request-scoped concerns only.
+
+**Context**: Need dependency injection to keep Application decoupled from Infrastructure, without adding a framework the assignment doesn't call for.
+
+**Alternatives considered**: `dependency-injector` library — more features (scopes, providers, wiring decorators) than this project needs; adds a learning-curve dependency for graders reading the code.
+
+**Tradeoffs**: Manual wiring means the composition root grows as adapters grow; for a prototype of this size that's a non-issue and arguably more readable than a framework's provider syntax.
+
+**Future enhancement**: Revisit if the object graph becomes large enough that manual wiring is error-prone (unlikely at this project's scope).
+
+---
+
+## TD-09: Persistence — SQLModel over SQLite, Postgres-ready
+
+**Decision**: SQLModel (SQLAlchemy + Pydantic) models, SQLite file for development, connection string swap to Postgres for anything beyond single-machine use.
+
+**Context**: Need to persist cameras, stream profiles, recording index, and detection events with type-checked schemas that double as API DTOs' source of truth.
+
+**Alternatives considered**: Raw SQLAlchemy + separate Pydantic schemas (more boilerplate, two parallel model definitions); MongoDB (document flexibility not needed — the data is relational: camera → profiles → recordings → events).
+
+**Tradeoffs**: SQLite has no real concurrent-write story; fine for a prototype with one API process, wrong for a multi-instance deployment.
+
+**Future enhancement**: Postgres + Alembic migrations, and a TimescaleDB-style time-series table for `DetectionEvent` if event volume grows large enough that query performance on a plain relational table degrades.
+
+---
+
+## TD-10: Live preview transport — MJPEG first, WebSocket for events, HLS later
+
+**Decision**: Serve the live view as MJPEG-over-HTTP (`multipart/x-mixed-replace`) for the MVP; push analytics events/overlays over a separate WebSocket channel.
+
+**Context**: The browser can't play raw RTSP; something has to bridge camera stream → browser-renderable format.
+
+**Alternatives considered**:
+| Option | Latency | Browser support | Multi-viewer efficiency | Complexity |
+|---|---|---|---|---|
+| MJPEG (chosen) | Low | Universal (`<img>` tag) | Poor (re-encodes per viewer) | Low |
+| WebSocket binary frames | Low | Universal, needs client JS | Poor (same issue) | Medium |
+| HLS (FFmpeg segmenter) | 2–10s | Universal (`<video>` + hls.js) | Good (segments cacheable/shareable) | Medium-High |
+| WebRTC | Very low | Good, needs signaling | Good | High |
+
+**Tradeoffs**: MJPEG doesn't scale to many concurrent viewers per camera and has no built-in adaptive bitrate — acceptable because the assignment's evaluation scenario is one physical camera with a handful of viewers, not a multi-tenant viewing product.
+
+**Future enhancement**: HLS for scale/shareability, or WebRTC if sub-second latency becomes a requirement (e.g. PTZ control feedback).
+
+---
+
+## TD-11: In-process async pub-sub event bus, ports-first
+
+**Decision**: `IEventPublisher`/`IEventSubscriber` ports, implemented in-process (asyncio queue fan-out) for now.
+
+**Context**: Analytics events need to reach both the persistence layer and any live WebSocket subscribers without the orchestrator knowing about either.
+
+**Alternatives considered**: Redis Pub/Sub or Kafka from day one — correct direction for multi-instance deployments, unnecessary operational weight for a single-machine prototype.
+
+**Tradeoffs**: In-process bus doesn't survive an API process restart and can't fan out across multiple backend instances.
+
+**Future enhancement**: Redis Streams (ordering + replay) as a drop-in adapter behind the same port when horizontal scaling is needed.
+
+---
+
+## TD-12: Frontend state — React Query + Zustand, Tailwind
+
+**Decision**: React + TypeScript + Vite; React Query for all server state (cameras, recordings, events); Zustand for local UI state (selected camera, layout); Tailwind CSS for styling; `hls.js`/native `<img>`/`<video>` for media.
+
+**Context**: Frontend needs to poll/subscribe to live-changing server state (camera status, live events) and hold ephemeral UI state, without hand-rolling cache invalidation.
+
+**Alternatives considered**: Redux Toolkit (more ceremony than this app's state complexity warrants); plain `useState`/Context for server state (leads to manual refetch/cache-invalidation bugs, exactly the class of bug React Query exists to prevent).
+
+**Tradeoffs**: Two state libraries (React Query + Zustand) instead of one — accepted because they solve genuinely different problems (server cache vs. local UI state) and mixing them into one tool tends to produce worse code than using each for its purpose.
+
+**Future enhancement**: None anticipated; this stack scales fine through production for an app of this shape.
+
+---
+
+## TD-13: Config via `pydantic-settings`, one `.env`
+
+**Decision**: A single `Settings(BaseSettings)` class is the only place environment variables are read; everything else receives config through constructor injection from the composition root.
+
+**Context**: Multi-process system (API + N stream workers + analytics workers) needs consistent, type-checked configuration without scattered `os.environ.get()` calls that silently return `None` on typos.
+
+**Alternatives considered**: `python-dotenv` + manual parsing — no validation, no type coercion, errors surface at use-time instead of at startup.
+
+**Tradeoffs**: None significant; this is a low-risk, high-value choice.
+
+**Future enhancement**: Layer in a secrets manager (e.g. for camera credentials) before any real deployment — see TD-15.
+
+---
+
+## TD-14: Structured logging via `structlog`
+
+**Decision**: JSON-structured logs in non-dev environments, human-readable console rendering in dev; every log line tagged with `camera_id`/`source_id` and `trace_id` where applicable.
+
+**Context**: With N camera processes + analytics workers + the API process all logging concurrently, unstructured text logs are unreadable and unfilterable.
+
+**Alternatives considered**: Standard-library `logging` with manual formatting — works, but structured context propagation (binding `camera_id` once per worker) is exactly what `structlog`'s context-binding is built for.
+
+**Tradeoffs**: One more dependency; negligible cost.
+
+**Future enhancement**: Ship logs to a central aggregator (e.g. Loki/ELK) once running multi-machine.
+
+---
+
+## TD-15: Camera credentials — plaintext-avoidance now, secrets manager later
+
+**Decision**: Camera passwords are stored encrypted at rest (application-level symmetric encryption using a key from environment config), never logged, never returned in API responses after creation.
+
+**Context**: ONVIF onboarding necessarily handles camera passwords; this is real (if small-scale) sensitive data even in a prototype.
+
+**Alternatives considered**: Plaintext storage (rejected outright — avoidable security smell even in a take-home project); full secrets-manager integration (Vault/AWS Secrets Manager) — correct for production, disproportionate for a local prototype with one evaluator-provided camera.
+
+**Tradeoffs**: Application-level symmetric encryption with a config-supplied key is better than plaintext but is not a substitute for a real secrets manager (the key itself still lives in `.env`).
+
+**Future enhancement**: External secrets manager + per-camera credential rotation before any multi-tenant or production use.
+
+---
+
+## Future Enhancements (Consolidated)
+
+| Area | Current (prototype) | Production direction |
+|---|---|---|
+| Event bus | In-process asyncio | Redis Streams / Kafka |
+| Recording storage | Local filesystem | Object storage (S3/MinIO) behind `IRecordingRepository` |
+| Database | SQLite | Postgres + Alembic + (optionally) TimescaleDB for events |
+| Live preview | MJPEG + WebSocket | HLS and/or WebRTC |
+| Auth | None (local dev tool) | OAuth2/OIDC + RBAC |
+| Deployment | Single Mac Mini process tree | Docker Compose → k8s if needed |
+| Camera discovery | Manual IP entry | WS-Discovery-assisted network scan |
+| Detection models | COCO-pretrained YOLO | Fine-tuned per-deployment models |
+| Secrets | Encrypted-at-rest, config key | Secrets manager + rotation |
