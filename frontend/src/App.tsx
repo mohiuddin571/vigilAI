@@ -1,4 +1,5 @@
 import { useState } from "react";
+import DetectionOverlay from "./features/analytics-console/DetectionOverlay";
 import CameraOnboardingPage from "./features/camera-onboarding/CameraOnboardingPage";
 import LiveView from "./features/live-view/LiveView";
 import RecordingControl from "./features/recordings/RecordingControl";
@@ -41,7 +42,11 @@ function App() {
                   ))}
                 </select>
               </label>
-              <LiveView cameraId={selected.id} cameraName={selected.name} />
+              <LiveView
+                cameraId={selected.id}
+                cameraName={selected.name}
+                overlay={<DetectionOverlay cameraId={selected.id} />}
+              />
               <RecordingControl cameraId={selected.id} />
             </>
           )}

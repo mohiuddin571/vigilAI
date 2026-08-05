@@ -1,9 +1,17 @@
+import type { ReactNode } from 'react';
 import useLiveStream from '../../hooks/useLiveStream';
 import type { StreamState } from '../../types/stream';
 
 interface LiveViewProps {
   cameraId: string;
   cameraName: string;
+  /**
+   * Rendered over the `<img>` inside the same `relative` wrapper (e.g. a
+   * `DetectionOverlay` from `analytics-console/`, T-093). A generic slot
+   * rather than a direct import, since `features/` never import each other
+   * (docs/FOLDER_STRUCTURE.md) — the composition happens in `App.tsx`.
+   */
+  overlay?: ReactNode;
 }
 
 const STATE_LABEL: Record<StreamState, string> = {
@@ -22,7 +30,7 @@ const STATE_DOT_CLASS: Record<StreamState, string> = {
   stopped: 'bg-slate-300',
 };
 
-function LiveView({ cameraId, cameraName }: LiveViewProps) {
+function LiveView({ cameraId, cameraName, overlay }: LiveViewProps) {
   const { status, mjpegUrl, isConnecting, start, stop } = useLiveStream(cameraId);
   const state = status?.state ?? 'stopped';
   const isStreaming = state !== 'stopped';
@@ -61,7 +69,10 @@ function LiveView({ cameraId, cameraName }: LiveViewProps) {
       </div>
 
       {isStreaming ? (
-        <img src={mjpegUrl} alt={`Live view for ${cameraName}`} className="w-full rounded" />
+        <div className="relative">
+          <img src={mjpegUrl} alt={`Live view for ${cameraName}`} className="w-full rounded" />
+          {overlay}
+        </div>
       ) : (
         <p className="text-sm text-slate-400">Not connected.</p>
       )}

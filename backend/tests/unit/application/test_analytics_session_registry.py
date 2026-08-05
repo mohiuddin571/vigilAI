@@ -75,7 +75,7 @@ async def test_enable_starts_a_session_and_events_are_published() -> None:
     async def process(frame: Frame) -> list[DetectionEvent]:
         return _event(frame)
 
-    def build_use_case(source_id: str) -> RunAnalyticsPipelineUseCase:
+    async def build_use_case(source_id: str) -> RunAnalyticsPipelineUseCase:
         source = _FakeSource(source_id)
         sources[source_id] = source
         return RunAnalyticsPipelineUseCase(source, process, publisher)  # type: ignore[arg-type]
@@ -98,7 +98,7 @@ async def test_enable_starts_a_session_and_events_are_published() -> None:
 async def test_enable_twice_does_not_start_a_second_session() -> None:
     sources: dict[str, _FakeSource] = {}
 
-    def build_use_case(source_id: str) -> RunAnalyticsPipelineUseCase:
+    async def build_use_case(source_id: str) -> RunAnalyticsPipelineUseCase:
         source = _FakeSource(source_id)
         sources[source_id] = source
         return RunAnalyticsPipelineUseCase(
@@ -133,7 +133,7 @@ async def test_disable_stops_new_events_without_restarting_the_source() -> None:
             await registry_holder["registry"].disable("mp4-demo")
         return _event(frame)
 
-    def build_use_case(source_id: str) -> RunAnalyticsPipelineUseCase:
+    async def build_use_case(source_id: str) -> RunAnalyticsPipelineUseCase:
         source = _FakeSource(source_id)
         sources[source_id] = source
         return RunAnalyticsPipelineUseCase(source, process, publisher)  # type: ignore[arg-type]
@@ -157,7 +157,7 @@ async def test_disable_stops_new_events_without_restarting_the_source() -> None:
     source.release()
 
 
-def _fail_build_use_case(source_id: str) -> RunAnalyticsPipelineUseCase:
+async def _fail_build_use_case(source_id: str) -> RunAnalyticsPipelineUseCase:
     raise AssertionError("build_use_case must not be called for disable() with no session")
 
 
