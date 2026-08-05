@@ -24,14 +24,14 @@ Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./
 - [x] Playback (M7)
 - [x] Analytics Pipeline Foundation — orchestrator, source-independence regression test (M8)
 - [x] YOLO Integration — Object Detection & Classification (M9)
+- [x] Object Tracking (ByteTrack, used by M9/M11)
 
 # In Progress
 
-- [ ] _Nothing yet. Next up: Object Tracking._
+- [ ] _Nothing yet. Next up: Color Detection._
 
 # Remaining
 
-- [ ] Object Tracking (ByteTrack, used by M9/M11)
 - [ ] Color Detection (M10)
 - [ ] Loitering Detection (M11)
 - [ ] Missing Object Detection (M12)
