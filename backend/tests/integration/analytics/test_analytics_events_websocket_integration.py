@@ -43,7 +43,7 @@ async def _build_app(db_path: Path) -> FastAPI:
     event_bus.subscribe(hub.broadcast)
     orchestrator = AnalyticsOrchestrator([NoOpDetectorPlugin()])
 
-    def build_use_case(source_id: str) -> RunAnalyticsPipelineUseCase:
+    async def build_use_case(source_id: str) -> RunAnalyticsPipelineUseCase:
         frame_source = SupervisedFrameSource(
             Mp4FileFrameSource(file_path=str(_FIXTURE_PATH), source_id=source_id),
             backoff_schedule=[0.1],

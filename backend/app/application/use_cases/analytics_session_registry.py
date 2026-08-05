@@ -1,6 +1,6 @@
 import asyncio
 from collections import defaultdict
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
 from app.application.use_cases.run_analytics_pipeline import RunAnalyticsPipelineUseCase
@@ -28,9 +28,17 @@ class AnalyticsSessionRegistry:
     session's task or frame source — only `RunAnalyticsPipelineUseCase.disable()`
     — so "toggling off stops new events without restarting the stream"
     (T-085's Definition of Done) holds by construction.
+
+    `build_use_case` is `async` (M9, docs/TECHNICAL_DECISIONS.md TD-25) —
+    widened from a plain sync callable because resolving a real onboarded
+    camera's `source_id` into a frame source requires an `await`ed
+    repository lookup (M8's original "mp4-demo"-only source needed no I/O to
+    build). An additive signature change, not a redesign.
     """
 
-    def __init__(self, build_use_case: Callable[[str], RunAnalyticsPipelineUseCase]) -> None:
+    def __init__(
+        self, build_use_case: Callable[[str], Awaitable[RunAnalyticsPipelineUseCase]]
+    ) -> None:
         self._build_use_case = build_use_case
         self._sessions: dict[str, _AnalyticsSession] = {}
         self._locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
@@ -41,7 +49,7 @@ class AnalyticsSessionRegistry:
             if session is not None:
                 session.use_case.enable()
                 return
-            use_case = self._build_use_case(source_id)
+            use_case = await self._build_use_case(source_id)
             task = asyncio.create_task(use_case.execute())
             self._sessions[source_id] = _AnalyticsSession(use_case, task)
 

@@ -49,9 +49,9 @@ from app.application.use_cases.update_camera_rtsp_override import UpdateCameraRt
 from app.core.config import Settings
 from app.domain.entities.camera import Camera
 from app.domain.entities.stream_profile import StreamProfile
-from app.domain.exceptions import UnsupportedConfigurationError
-from app.infrastructure.analytics.noop_plugin import NoOpDetectorPlugin
+from app.domain.exceptions import CameraNotFoundError, UnsupportedConfigurationError
 from app.infrastructure.analytics.orchestrator import AnalyticsOrchestrator
+from app.infrastructure.analytics.yolo_detector import YoloObjectDetector
 from app.infrastructure.messaging.event_bus import EventBus
 from app.infrastructure.onvif.onvif_camera_gateway import OnvifCameraGateway
 from app.infrastructure.persistence.database import build_engine, build_session_factory, init_db
@@ -69,6 +69,27 @@ from app.interfaces.websocket.analytics_events import AnalyticsEventsHub
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEBUG_MP4_FIXTURE_PATH = _REPO_ROOT / "backend" / "tests" / "fixtures" / "sample.mp4"
 _ANALYTICS_MP4_SOURCE_ID = "mp4-demo"
+
+
+def _select_primary_stream_profile(camera: Camera) -> StreamProfile:
+    """Pick a stream profile to resolve a camera-backed analytics source from.
+
+    A small, deliberate duplicate of `start_live_stream.py`'s private
+    `_select_stream_profile`'s no-explicit-`profile_id` branch (M9,
+    docs/TECHNICAL_DECISIONS.md TD-25) — importing a leading-underscore
+    function across modules is worse than this ~10-line duplication, and
+    analytics has no equivalent of live view's per-request `profile_id`
+    override to justify reusing the fuller function.
+    """
+    for profile in camera.stream_profiles:
+        if profile.is_primary and profile.onvif_token is not None:
+            return profile
+    for profile in camera.stream_profiles:
+        if profile.onvif_token is not None:
+            return profile
+    raise UnsupportedConfigurationError(
+        f"Camera {camera.id} has no stream profile with an ONVIF token to stream from"
+    )
 
 
 class Container:
@@ -90,7 +111,16 @@ class Container:
         self._analytics_events_hub = AnalyticsEventsHub()
         self._event_bus.subscribe(self._event_repository.add)
         self._event_bus.subscribe(self._analytics_events_hub.broadcast)
-        self._analytics_orchestrator = AnalyticsOrchestrator([NoOpDetectorPlugin()])
+        self._analytics_orchestrator = AnalyticsOrchestrator(
+            [
+                YoloObjectDetector(
+                    model_path=str(settings.yolo_model_path),
+                    confidence_threshold=settings.yolo_confidence_threshold,
+                    iou_threshold=settings.yolo_iou_threshold,
+                    device=settings.yolo_device,
+                )
+            ]
+        )
         self._analytics_session_registry = AnalyticsSessionRegistry(
             build_use_case=self._build_analytics_use_case
         )
@@ -250,27 +280,54 @@ class Container:
         """
         return self._debug_stream_use_case
 
-    def _build_analytics_frame_source(self, source_id: str) -> IFrameSource:
-        # Only one analytics-enableable source exists in M8 (the MP4 demo
-        # fixture) — M8 explicitly does not depend on M3-M7's ONVIF/camera
-        # machinery (docs/IMPLEMENTATION_PLAN.md's Milestone Dependency
-        # Graph). Wrapped in `SupervisedFrameSource` so consumption goes
+    async def _build_analytics_frame_source(self, source_id: str) -> IFrameSource:
+        # M9 (docs/TECHNICAL_DECISIONS.md TD-25) widens M8's "mp4-demo"-only
+        # source to also accept a real onboarded camera's id, resolved the
+        # same way `_build_live_stream_worker` resolves one for live view —
+        # wrapped in `SupervisedFrameSource` either way, so consumption goes
         # through the same `ReconnectSupervisor` reconnect/backoff path M5's
-        # live-view and M6's recording already build on, per
-        # docs/IMPLEMENTATION_PLAN.md §M8's Constraints.
-        if source_id != _ANALYTICS_MP4_SOURCE_ID:
-            raise UnsupportedConfigurationError(
-                f"No analytics-enableable source {source_id!r}"
-                f" (only {_ANALYTICS_MP4_SOURCE_ID!r} exists in this milestone)"
+        # live-view and M6's recording already build on (docs/IMPLEMENTATION_PLAN.md
+        # §M8's Constraints, unchanged by this milestone).
+        if source_id == _ANALYTICS_MP4_SOURCE_ID:
+            source: IFrameSource = Mp4FileFrameSource(
+                file_path=str(_DEBUG_MP4_FIXTURE_PATH), source_id=source_id
             )
+        else:
+            source = await self._build_camera_analytics_source(source_id)
         return SupervisedFrameSource(
-            Mp4FileFrameSource(file_path=str(_DEBUG_MP4_FIXTURE_PATH), source_id=source_id),
-            backoff_schedule=self._settings.stream_worker_reconnect_backoff_seconds,
+            source, backoff_schedule=self._settings.stream_worker_reconnect_backoff_seconds
         )
 
-    def _build_analytics_use_case(self, source_id: str) -> RunAnalyticsPipelineUseCase:
+    async def _build_camera_analytics_source(self, source_id: str) -> IFrameSource:
+        try:
+            camera_id = UUID(source_id)
+        except ValueError as exc:
+            raise UnsupportedConfigurationError(
+                f"No analytics-enableable source {source_id!r}"
+                f" (expected {_ANALYTICS_MP4_SOURCE_ID!r} or an onboarded camera id)"
+            ) from exc
+        camera = await self._camera_repository.get(camera_id)
+        if camera is None:
+            raise CameraNotFoundError(f"No onboarded camera with id {camera_id}")
+        profile = _select_primary_stream_profile(camera)
+        assert profile.onvif_token is not None
+        return OnvifRtspFrameSource(
+            ip_address=camera.ip_address,
+            username=camera.username,
+            password=camera.password,
+            rtsp_url_override=camera.rtsp_url_override,
+            profile_id=profile.onvif_token,
+            source_id=str(camera.id),
+            camera_gateway_factory=self.build_camera_gateway,
+            port=camera.port,
+            open_timeout_ms=self._settings.rtsp_open_timeout_ms,
+            read_timeout_ms=self._settings.rtsp_read_timeout_ms,
+            rtsp_transport=self._settings.rtsp_transport,
+        )
+
+    async def _build_analytics_use_case(self, source_id: str) -> RunAnalyticsPipelineUseCase:
         return RunAnalyticsPipelineUseCase(
-            frame_source=self._build_analytics_frame_source(source_id),
+            frame_source=await self._build_analytics_frame_source(source_id),
             process_frame=self._analytics_orchestrator.process,
             event_publisher=self._event_bus,
         )

@@ -4,7 +4,7 @@ A Video Management System (VMS) with integrated video analytics: ONVIF camera on
 
 Built as a production-quality prototype demonstrating Clean Architecture applied to a real-time video/AI system.
 
-> **Status**: 🚧 M0 (Project Scaffolding & Tooling), M1 (Domain & Application Core), M2 (Frame Source Abstraction), M3 (ONVIF Camera Onboarding), M4 (ONVIF Configuration), M5 (Live Streaming + Auto-Reconnect), M6 (Recording), M7 (Playback), and M8 (Analytics Pipeline Foundation) complete. Next up: M9 (YOLO Integration). See [Project State](./docs/AI_PROJECT_CONTEXT.md#9-project-state).
+> **Status**: 🚧 M0 (Project Scaffolding & Tooling), M1 (Domain & Application Core), M2 (Frame Source Abstraction), M3 (ONVIF Camera Onboarding), M4 (ONVIF Configuration), M5 (Live Streaming + Auto-Reconnect), M6 (Recording), M7 (Playback), M8 (Analytics Pipeline Foundation), and M9 (YOLO Integration — Object Detection & Classification) complete. Next up: Object Tracking. See [Project State](./docs/AI_PROJECT_CONTEXT.md#9-project-state).
 
 ---
 
@@ -162,6 +162,19 @@ curl -X POST http://localhost:8000/streams/{camera_id}/stop
 ```
 
 The status WebSocket (`ws://localhost:8000/ws/streams/{camera_id}/status`) pushes the same status roughly once a second — this is what the frontend's connection indicator subscribes to. To see the reconnect behavior described in [TECHNICAL_DECISIONS.md](./docs/TECHNICAL_DECISIONS.md) TD-21, interrupt the camera's network path (or kill a local test RTSP stream) while connected and watch `status`/the WS channel move to `"reconnecting"` and back to `"connected"`.
+
+### Step 8 — Object detection overlay (M9, works on the MP4 demo or a real camera)
+
+Once a stream is connected (Step 7, or the MP4 debug stream's `source_id="mp4-demo"`), the frontend's Live View automatically enables analytics for that source and overlays live YOLO detection boxes/labels. The very first detection anywhere on a machine downloads `yolov8n.pt` (~6MB) into `storage/models/` (gitignored, cached thereafter) — this needs network access once. Equivalently, from the API directly:
+
+```bash
+curl -X POST http://localhost:8000/analytics/{source_id}/enable   # source_id: "mp4-demo" or a camera's id
+curl http://localhost:8000/analytics/{source_id}/status
+curl http://localhost:8000/analytics/events                       # persisted detections, filterable
+# ws://localhost:8000/ws/analytics/events pushes each detection live
+```
+
+See [TECHNICAL_DECISIONS.md](./docs/TECHNICAL_DECISIONS.md) TD-25 for the model/execution-strategy choices, the achieved FPS on the Mac Mini, and `scripts/benchmark_yolo_fps.py` for reproducing that measurement.
 
 ### Stopping the app
 

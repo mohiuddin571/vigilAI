@@ -10,6 +10,7 @@ export default defineConfig({
       '/cameras': 'http://localhost:8000',
       '/streams': 'http://localhost:8000',
       '/recordings': 'http://localhost:8000',
+      '/analytics': 'http://localhost:8000',
       '/ws': { target: 'ws://localhost:8000', ws: true },
     },
   },

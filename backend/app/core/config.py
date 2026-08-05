@@ -65,5 +65,19 @@ class Settings(BaseSettings):
     ffmpeg_binary_path: str = "ffmpeg"
     ffprobe_binary_path: str = "ffprobe"
 
+    # YOLO object detection/classification (M9, T-090/T-091;
+    # docs/TECHNICAL_DECISIONS.md TD-25). `yolo_model_path` is a full path
+    # (not just a filename) under the gitignored storage/models/ so
+    # Ultralytics' own download-if-missing behavior writes weights exactly
+    # there — that's the entire caching mechanism, no separate download
+    # script needed (T-090's "cached thereafter"). Confidence/IoU thresholds
+    # match Ultralytics' own upstream defaults, made explicit here per TD-13.
+    yolo_model_path: Path = _REPO_ROOT / "storage" / "models" / "yolov8n.pt"
+    yolo_confidence_threshold: float = 0.25
+    yolo_iou_threshold: float = 0.45
+    # None lets Ultralytics auto-select a device (CUDA > Apple MPS > CPU) at
+    # inference time rather than this project guessing the deployment box.
+    yolo_device: str | None = None
+
 
 settings = Settings()  # type: ignore[call-arg]
