@@ -57,9 +57,12 @@ from app.domain.entities.camera import Camera
 from app.domain.entities.stream_profile import StreamProfile
 from app.domain.exceptions import CameraNotFoundError, UnsupportedConfigurationError
 from app.infrastructure.analytics.color_detector import ColorDetector
+from app.infrastructure.analytics.easyocr_reader import EasyOcrReader
+from app.infrastructure.analytics.license_plate_recognizer import LicensePlateRecognizer
 from app.infrastructure.analytics.loitering_detector import LoiteringDetector
 from app.infrastructure.analytics.missing_object_detector import MissingObjectDetector
 from app.infrastructure.analytics.orchestrator import AnalyticsOrchestrator
+from app.infrastructure.analytics.plate_localizer import PlateLocalizer
 from app.infrastructure.analytics.yolo_detector import YoloObjectDetector
 from app.infrastructure.messaging.event_bus import EventBus
 from app.infrastructure.onvif.onvif_camera_gateway import OnvifCameraGateway
@@ -131,7 +134,11 @@ class Container:
                 # YoloObjectDetector writes into `context` for this same frame
                 # (T-100/T-113/T-121, docs/TECHNICAL_DECISIONS.md
                 # TD-27/TD-28/TD-29) — all three must run after
-                # YoloObjectDetector in this list.
+                # YoloObjectDetector in this list. LicensePlateRecognizer
+                # (T-132, TD-30) is the one exception: it localizes plate
+                # candidates over the full frame independently, reading
+                # nothing from `context` — its position in this list is
+                # therefore not order-dependent, kept last for readability.
                 YoloObjectDetector(
                     model_path=str(settings.yolo_model_path),
                     confidence_threshold=settings.yolo_confidence_threshold,
@@ -141,6 +148,16 @@ class Container:
                 ColorDetector(),
                 LoiteringDetector(zone_repository=self._zone_repository),
                 MissingObjectDetector(zone_repository=self._zone_repository),
+                LicensePlateRecognizer(
+                    plate_localizer=PlateLocalizer(),
+                    plate_reader=EasyOcrReader(
+                        languages=settings.easyocr_languages,
+                        model_storage_directory=str(settings.easyocr_model_storage_dir),
+                        gpu=settings.easyocr_gpu,
+                        min_confidence=settings.easyocr_min_confidence,
+                    ),
+                    queue_max_size=settings.lpr_ocr_queue_max_size,
+                ),
             ]
         )
         self._analytics_session_registry = AnalyticsSessionRegistry(
