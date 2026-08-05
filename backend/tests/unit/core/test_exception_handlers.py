@@ -4,6 +4,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.core.exception_handlers import register_exception_handlers
 from app.domain.exceptions import (
+    AnalyticsZoneNotFoundError,
     CameraAuthenticationError,
     CameraNotFoundError,
     CameraUnreachableError,
@@ -24,6 +25,7 @@ def _build_app() -> FastAPI:
             "unreachable": CameraUnreachableError,
             "unsupported": UnsupportedConfigurationError,
             "invalid_state": InvalidDomainStateError,
+            "zone_not_found": AnalyticsZoneNotFoundError,
         }
         raise exceptions[exc_name]("boom")
 
@@ -38,6 +40,7 @@ def _build_app() -> FastAPI:
         ("unreachable", 400),
         ("unsupported", 422),
         ("invalid_state", 422),
+        ("zone_not_found", 404),
     ],
 )
 async def test_domain_exceptions_map_to_typed_4xx(exc_name: str, expected_status: int) -> None:

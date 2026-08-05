@@ -24,6 +24,7 @@ import functools
 from pathlib import Path
 from uuid import UUID
 
+from app.application.ports.analytics_zone_repository import IAnalyticsZoneRepository
 from app.application.ports.camera_gateway import ICameraGateway
 from app.application.ports.camera_repository import ICameraRepository
 from app.application.ports.event_repository import IEventRepository
@@ -31,13 +32,17 @@ from app.application.ports.frame_source import IFrameSource
 from app.application.ports.recording_repository import IRecordingRepository
 from app.application.ports.recording_worker import IRecordingWorker
 from app.application.use_cases.analytics_session_registry import AnalyticsSessionRegistry
+from app.application.use_cases.create_zone import CreateZoneUseCase
 from app.application.use_cases.debug_stream import DebugStreamUseCase
+from app.application.use_cases.delete_zone import DeleteZoneUseCase
 from app.application.use_cases.get_camera import GetCameraUseCase
 from app.application.use_cases.get_camera_config import GetCameraConfigUseCase
 from app.application.use_cases.get_recording import GetRecordingUseCase
+from app.application.use_cases.get_zone import GetZoneUseCase
 from app.application.use_cases.list_cameras import ListCamerasUseCase
 from app.application.use_cases.list_detection_events import ListDetectionEventsUseCase
 from app.application.use_cases.list_recordings import ListRecordingsUseCase
+from app.application.use_cases.list_zones_by_camera import ListZonesByCameraUseCase
 from app.application.use_cases.onboard_camera import OnboardCameraUseCase
 from app.application.use_cases.recording_session_registry import RecordingSessionRegistry
 from app.application.use_cases.run_analytics_pipeline import RunAnalyticsPipelineUseCase
@@ -46,15 +51,18 @@ from app.application.use_cases.start_recording import StartRecordingUseCase
 from app.application.use_cases.stop_recording import StopRecordingUseCase
 from app.application.use_cases.update_camera_config import UpdateCameraConfigUseCase
 from app.application.use_cases.update_camera_rtsp_override import UpdateCameraRtspOverrideUseCase
+from app.application.use_cases.update_zone import UpdateZoneUseCase
 from app.core.config import Settings
 from app.domain.entities.camera import Camera
 from app.domain.entities.stream_profile import StreamProfile
 from app.domain.exceptions import CameraNotFoundError, UnsupportedConfigurationError
 from app.infrastructure.analytics.color_detector import ColorDetector
+from app.infrastructure.analytics.loitering_detector import LoiteringDetector
 from app.infrastructure.analytics.orchestrator import AnalyticsOrchestrator
 from app.infrastructure.analytics.yolo_detector import YoloObjectDetector
 from app.infrastructure.messaging.event_bus import EventBus
 from app.infrastructure.onvif.onvif_camera_gateway import OnvifCameraGateway
+from app.infrastructure.persistence.analytics_zone_repository import SqlAnalyticsZoneRepository
 from app.infrastructure.persistence.database import build_engine, build_session_factory, init_db
 from app.infrastructure.persistence.event_repository import SqlEventRepository
 from app.infrastructure.persistence.recording_repository import SqlRecordingRepository
@@ -108,16 +116,20 @@ class Container:
             self._session_factory
         )
         self._event_repository: IEventRepository = SqlEventRepository(self._session_factory)
+        self._zone_repository: IAnalyticsZoneRepository = SqlAnalyticsZoneRepository(
+            self._session_factory
+        )
         self._event_bus = EventBus()
         self._analytics_events_hub = AnalyticsEventsHub()
         self._event_bus.subscribe(self._event_repository.add)
         self._event_bus.subscribe(self._analytics_events_hub.broadcast)
         self._analytics_orchestrator = AnalyticsOrchestrator(
             [
-                # Order matters: ColorDetector reads the bounding boxes
-                # YoloObjectDetector writes into `context` for this same
-                # frame (T-100, docs/TECHNICAL_DECISIONS.md TD-27) — it must
-                # run after YoloObjectDetector in this list.
+                # Order matters: ColorDetector and LoiteringDetector both read
+                # the bounding boxes/track ids YoloObjectDetector writes into
+                # `context` for this same frame (T-100/T-113,
+                # docs/TECHNICAL_DECISIONS.md TD-27/TD-28) — both must run
+                # after YoloObjectDetector in this list.
                 YoloObjectDetector(
                     model_path=str(settings.yolo_model_path),
                     confidence_threshold=settings.yolo_confidence_threshold,
@@ -125,6 +137,7 @@ class Container:
                     device=settings.yolo_device,
                 ),
                 ColorDetector(),
+                LoiteringDetector(zone_repository=self._zone_repository),
             ]
         )
         self._analytics_session_registry = AnalyticsSessionRegistry(
@@ -351,3 +364,21 @@ class Container:
 
     def build_analytics_events_hub(self) -> AnalyticsEventsHub:
         return self._analytics_events_hub
+
+    def build_zone_repository(self) -> IAnalyticsZoneRepository:
+        return self._zone_repository
+
+    def build_create_zone_use_case(self) -> CreateZoneUseCase:
+        return CreateZoneUseCase(self.build_zone_repository())
+
+    def build_list_zones_by_camera_use_case(self) -> ListZonesByCameraUseCase:
+        return ListZonesByCameraUseCase(self.build_zone_repository())
+
+    def build_get_zone_use_case(self) -> GetZoneUseCase:
+        return GetZoneUseCase(self.build_zone_repository())
+
+    def build_update_zone_use_case(self) -> UpdateZoneUseCase:
+        return UpdateZoneUseCase(self.build_zone_repository())
+
+    def build_delete_zone_use_case(self) -> DeleteZoneUseCase:
+        return DeleteZoneUseCase(self.build_zone_repository())

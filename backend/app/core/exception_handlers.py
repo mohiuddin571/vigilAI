@@ -5,6 +5,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
 
 from app.domain.exceptions import (
+    AnalyticsZoneNotFoundError,
     CameraAuthenticationError,
     CameraNotFoundError,
     CameraUnreachableError,
@@ -31,6 +32,7 @@ _STATUS_BY_EXCEPTION: dict[type[DomainError], int] = {
     InvalidDomainStateError: status.HTTP_422_UNPROCESSABLE_CONTENT,
     RecordingNotInProgressError: status.HTTP_409_CONFLICT,
     RecordingNotFoundError: status.HTTP_404_NOT_FOUND,
+    AnalyticsZoneNotFoundError: status.HTTP_404_NOT_FOUND,
     DomainError: status.HTTP_400_BAD_REQUEST,
 }
 

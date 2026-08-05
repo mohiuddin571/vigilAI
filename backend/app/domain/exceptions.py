@@ -46,3 +46,7 @@ class RecordingNotInProgressError(DomainError):
 
 class RecordingNotFoundError(DomainError):
     """No recording exists for the given identifier, or its segment file is missing from disk."""
+
+
+class AnalyticsZoneNotFoundError(DomainError):
+    """No `AnalyticsZone` exists for the given identifier."""

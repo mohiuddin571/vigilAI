@@ -46,6 +46,23 @@ class RecordingRow(SQLModel, table=True):
     size_bytes: int | None = None
 
 
+class AnalyticsZoneRow(SQLModel, table=True):
+    """SQL row shape for one `AnalyticsZone` polygon (TD-09, M11/T-111).
+
+    `polygon_json` is a JSON-encoded list of `[x, y]` pairs, normalized
+    `[0, 1]` (matching `BoundingBox`'s coordinate space) — a normalized
+    child table isn't warranted for a handful of points per zone.
+    """
+
+    __tablename__ = "analytics_zone"
+
+    id: str = Field(primary_key=True)
+    camera_id: str = Field(index=True)
+    name: str
+    polygon_json: str
+    dwell_threshold_seconds: float
+
+
 class DetectionEventRow(SQLModel, table=True):
     """SQL row shape for one analytics finding (TD-09, M8/TD-24).
 
