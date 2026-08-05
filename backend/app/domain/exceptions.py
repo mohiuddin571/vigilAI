@@ -48,5 +48,11 @@ class RecordingNotFoundError(DomainError):
     """No recording exists for the given identifier, or its segment file is missing from disk."""
 
 
+class RecordingInProgressError(DomainError):
+    """A destructive/mutating operation was requested on a recording that's still being written
+    (`ended_at is None`) — e.g. deleting it while its segment file is actively being appended to
+    by a running Recording Worker would corrupt or race the in-progress write."""
+
+
 class AnalyticsZoneNotFoundError(DomainError):
     """No `AnalyticsZone` exists for the given identifier."""

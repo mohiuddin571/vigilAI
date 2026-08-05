@@ -183,6 +183,22 @@ This backlog is the fine-grained, trackable breakdown of [IMPLEMENTATION_PLAN.md
 
 ---
 
+## Epic: Camera & Event Lifecycle Management (post-M14)
+
+Not a numbered milestone — surfaced directly by the evaluator/user while trying M14's shipped UI ("can I clear events, edit a camera, delete a camera and have its recordings go with it, and where's the analytics on/off control I saw a count for") rather than planned in `IMPLEMENTATION_PLAN.md` up front. Real new backend capability, so scoped and confirmed before implementation per `AGENTS.md`. See `docs/TECHNICAL_DECISIONS.md` TD-32 for the cascade-delete design.
+
+| ID | Task | Priority | Complexity | Dependencies | Definition of Done |
+|---|---|---|---|---|---|
+| T-170 | `UpdateCameraUseCase` + `PATCH /cameras/{id}` (name/IP/port/username/password) | P1 | S | M3 | Partial update, domain validation re-runs (TD-32), typed 4xx on invalid input |
+| T-171 | `DeleteCameraUseCase` (cascade) + `DELETE /cameras/{id}` | P1 | M | T-170, M6, M8, M11 | Deleting a camera stops its stream/recording/analytics, then removes its zones, recordings (file + row), events, and the camera row |
+| T-172 | `DeleteRecordingUseCase` + `DELETE /recordings/{id}` | P1 | S | M6 | Deletes file + row; blocked with a typed 409 while the recording is still in progress |
+| T-173 | `ClearDetectionEventsUseCase` + `DELETE /analytics/events` | P1 | S | M8 | Same optional filters as `GET /analytics/events`; returns deleted count |
+| T-174 | Frontend: edit/delete camera UI | P1 | M | T-170, T-171 | Edit dialog + delete with a cascade-warning confirm, wired to the new endpoints |
+| T-175 | Frontend: clear-events UI | P1 | S | T-173 | Event Center: clear-filtered and clear-all actions, both confirmed |
+| T-176 | Frontend: per-camera analytics on/off visibility | P2 | S | M8 (no new backend) | Real enabled/disabled state + toggle surfaced per camera, not just an approximate dashboard count |
+
+---
+
 ## Cross-Cutting / Quality Backlog (not tied to one milestone)
 
 | ID | Task | Priority | Complexity | Dependencies | Definition of Done |

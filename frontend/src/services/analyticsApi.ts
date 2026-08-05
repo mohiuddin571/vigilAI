@@ -1,5 +1,6 @@
 import type {
   AnalyticsStatusResponse,
+  ClearEventsResponse,
   DetectionEventFilters,
   DetectionEventResponse,
 } from '../types/analytics';
@@ -49,4 +50,24 @@ export async function listDetectionEvents(
     throw new ApiError(await parseErrorDetail(response), response.status);
   }
   return (await response.json()) as DetectionEventResponse[];
+}
+
+/** `DELETE /analytics/events` (T-173) — same optional filters as `listDetectionEvents`;
+ * no filters clears every event. Returns how many rows were removed. */
+export async function clearDetectionEvents(
+  filters: DetectionEventFilters = {},
+): Promise<ClearEventsResponse> {
+  const params = new URLSearchParams();
+  if (filters.cameraId) params.set('camera_id', filters.cameraId);
+  if (filters.eventType) params.set('event_type', filters.eventType);
+  if (filters.start) params.set('start', filters.start);
+  if (filters.end) params.set('end', filters.end);
+  const query = params.toString();
+  const response = await fetch(query ? `/analytics/events?${query}` : '/analytics/events', {
+    method: 'DELETE',
+  });
+  if (!response.ok) {
+    throw new ApiError(await parseErrorDetail(response), response.status);
+  }
+  return (await response.json()) as ClearEventsResponse;
 }

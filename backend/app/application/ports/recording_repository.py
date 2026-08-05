@@ -26,3 +26,10 @@ class IRecordingRepository(ABC):
         end: datetime | None = None,
     ) -> list[Recording]:
         """List recordings, optionally filtered by camera and/or time range."""
+
+    @abstractmethod
+    async def delete(self, recording_id: UUID) -> None:
+        """Delete a recording's persisted metadata row. Does not touch the segment file on
+        disk — callers that also need the file removed (`DeleteRecordingUseCase`,
+        `DeleteCameraUseCase`) unlink it themselves via `Recording.file_path` before calling
+        this, since file I/O is an infrastructure concern this port doesn't own."""

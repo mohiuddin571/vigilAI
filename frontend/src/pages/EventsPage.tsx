@@ -1,4 +1,6 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
+import ConfirmDialog from '../components/ConfirmDialog';
 import Panel from '../components/Panel';
 import EventFilters, { type EventFilterState } from '../features/event-center/EventFilters';
 import EventTable from '../features/event-center/EventTable';
@@ -6,6 +8,8 @@ import useAnalyticsEvents from '../hooks/useAnalyticsEvents';
 import useAnalyticsEventsFeed from '../hooks/useAnalyticsEventsFeed';
 import useCameras from '../hooks/useCameras';
 import { categorizeEvent } from '../lib/eventCategory';
+import { clearDetectionEvents } from '../services/analyticsApi';
+import { ApiError } from '../services/camerasApi';
 import type { DetectionEventResponse } from '../types/analytics';
 
 /** `datetime-local` input value -> ISO 8601, or undefined if empty. */
@@ -44,14 +48,26 @@ function initialFilters(): EventFilterState {
 function EventsPage() {
   const [filters, setFilters] = useState(initialFilters);
   const [live, setLive] = useState(true);
+  const [confirmingClear, setConfirmingClear] = useState<'filtered' | 'all' | null>(null);
+  const queryClient = useQueryClient();
 
-  const { data: cameras } = useCameras();
-  const { data: historicalEvents, isLoading, isError } = useAnalyticsEvents({
+  const serverFilters = {
     cameraId: filters.cameraId || undefined,
     start: toIsoOrUndefined(filters.start),
     end: toIsoOrUndefined(filters.end),
-  });
+  };
+  const { data: cameras } = useCameras();
+  const { data: historicalEvents, isLoading, isError } = useAnalyticsEvents(serverFilters);
   const liveEvents = useAnalyticsEventsFeed(live);
+
+  const clearMutation = useMutation({
+    mutationFn: (scope: 'filtered' | 'all') =>
+      clearDetectionEvents(scope === 'filtered' ? serverFilters : {}),
+    onSuccess: () => {
+      setConfirmingClear(null);
+      void queryClient.invalidateQueries({ queryKey: ['analytics-events'] });
+    },
+  });
 
   const merged = useMemo(() => {
     const byId = new Map<string, DetectionEventResponse>();
@@ -79,6 +95,24 @@ function EventsPage() {
       <Panel
         title="Event Center"
         description="Every analytics finding across every camera — filterable, live-updating."
+        actions={
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmingClear('filtered')}
+              className="rounded border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700"
+            >
+              Clear shown range
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmingClear('all')}
+              className="rounded border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600"
+            >
+              Clear ALL events
+            </button>
+          </div>
+        }
       >
         <div className="space-y-4">
           <EventFilters
@@ -94,6 +128,28 @@ function EventsPage() {
           {!isLoading && !isError && <EventTable events={filtered} cameras={cameras ?? []} />}
         </div>
       </Panel>
+
+      {confirmingClear && (
+        <ConfirmDialog
+          title={confirmingClear === 'all' ? 'Clear ALL events' : 'Clear shown range'}
+          message={
+            confirmingClear === 'all'
+              ? 'Permanently delete every analytics event for every camera, regardless of any filter set below. This cannot be undone.'
+              : 'Permanently delete every event matching the current camera + time-range filters (category and plate-text filters are display-only and are not applied to this delete). This cannot be undone.'
+          }
+          confirmLabel="Clear events"
+          isPending={clearMutation.isPending}
+          error={
+            clearMutation.error instanceof ApiError
+              ? clearMutation.error.message
+              : clearMutation.isError
+                ? 'Failed to clear events.'
+                : null
+          }
+          onConfirm={() => clearMutation.mutate(confirmingClear)}
+          onCancel={() => setConfirmingClear(null)}
+        />
+      )}
     </div>
   );
 }

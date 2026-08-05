@@ -63,6 +63,9 @@ class FakeCameraRepository(ICameraRepository):
     async def update(self, camera: Camera) -> None:
         self.cameras[camera.id] = camera
 
+    async def delete(self, camera_id: UUID) -> None:
+        self.cameras.pop(camera_id, None)
+
 
 class FakeCameraGateway(ICameraGateway):
     def __init__(self, *, fail_get_stream_uri: Exception | None = None) -> None:
@@ -121,6 +124,9 @@ class FakeRecordingRepository(IRecordingRepository):
 
     async def update(self, recording: Recording) -> None:
         self.recordings[recording.id] = recording
+
+    async def delete(self, recording_id: UUID) -> None:
+        self.recordings.pop(recording_id, None)
 
 
 class FakeRecordingWorker(IRecordingWorker):

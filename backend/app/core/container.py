@@ -29,11 +29,15 @@ from app.application.ports.camera_gateway import ICameraGateway
 from app.application.ports.camera_repository import ICameraRepository
 from app.application.ports.event_repository import IEventRepository
 from app.application.ports.frame_source import IFrameSource
+from app.application.ports.recording_file_store import IRecordingFileStore
 from app.application.ports.recording_repository import IRecordingRepository
 from app.application.ports.recording_worker import IRecordingWorker
 from app.application.use_cases.analytics_session_registry import AnalyticsSessionRegistry
+from app.application.use_cases.clear_detection_events import ClearDetectionEventsUseCase
 from app.application.use_cases.create_zone import CreateZoneUseCase
 from app.application.use_cases.debug_stream import DebugStreamUseCase
+from app.application.use_cases.delete_camera import DeleteCameraUseCase
+from app.application.use_cases.delete_recording import DeleteRecordingUseCase
 from app.application.use_cases.delete_zone import DeleteZoneUseCase
 from app.application.use_cases.get_camera import GetCameraUseCase
 from app.application.use_cases.get_camera_config import GetCameraConfigUseCase
@@ -49,6 +53,7 @@ from app.application.use_cases.run_analytics_pipeline import RunAnalyticsPipelin
 from app.application.use_cases.start_live_stream import StartLiveStreamUseCase
 from app.application.use_cases.start_recording import StartRecordingUseCase
 from app.application.use_cases.stop_recording import StopRecordingUseCase
+from app.application.use_cases.update_camera import UpdateCameraUseCase
 from app.application.use_cases.update_camera_config import UpdateCameraConfigUseCase
 from app.application.use_cases.update_camera_rtsp_override import UpdateCameraRtspOverrideUseCase
 from app.application.use_cases.update_zone import UpdateZoneUseCase
@@ -72,6 +77,7 @@ from app.infrastructure.persistence.event_repository import SqlEventRepository
 from app.infrastructure.persistence.recording_repository import SqlRecordingRepository
 from app.infrastructure.persistence.sql_camera_repository import SqlCameraRepository
 from app.infrastructure.security.credential_cipher import CredentialCipher
+from app.infrastructure.streaming.local_recording_file_store import LocalRecordingFileStore
 from app.infrastructure.streaming.mp4_frame_source import Mp4FileFrameSource
 from app.infrastructure.streaming.recording_worker import FfmpegRecordingWorker
 from app.infrastructure.streaming.rtsp_frame_source import OnvifRtspFrameSource
@@ -119,6 +125,7 @@ class Container:
         self._recording_repository: IRecordingRepository = SqlRecordingRepository(
             self._session_factory
         )
+        self._recording_file_store: IRecordingFileStore = LocalRecordingFileStore()
         self._event_repository: IEventRepository = SqlEventRepository(self._session_factory)
         self._zone_repository: IAnalyticsZoneRepository = SqlAnalyticsZoneRepository(
             self._session_factory
@@ -212,6 +219,33 @@ class Container:
 
     def build_update_camera_rtsp_override_use_case(self) -> UpdateCameraRtspOverrideUseCase:
         return UpdateCameraRtspOverrideUseCase(self.build_camera_repository())
+
+    def build_update_camera_use_case(self) -> UpdateCameraUseCase:
+        return UpdateCameraUseCase(self.build_camera_repository())
+
+    def build_recording_file_store(self) -> IRecordingFileStore:
+        return self._recording_file_store
+
+    def build_delete_recording_use_case(self) -> DeleteRecordingUseCase:
+        return DeleteRecordingUseCase(
+            self.build_recording_repository(), self.build_recording_file_store()
+        )
+
+    def build_delete_camera_use_case(self) -> DeleteCameraUseCase:
+        """A per-request factory (unlike `build_start_live_stream_use_case` et al.'s
+        singletons) — it only orchestrates other already-shared singletons
+        (`_start_live_stream_use_case`, `_stop_recording_use_case`,
+        `_analytics_session_registry`) rather than holding any state of its own."""
+        return DeleteCameraUseCase(
+            camera_repository=self.build_camera_repository(),
+            zone_repository=self.build_zone_repository(),
+            recording_repository=self.build_recording_repository(),
+            delete_recording_use_case=self.build_delete_recording_use_case(),
+            event_repository=self._event_repository,
+            stream_use_case=self.build_start_live_stream_use_case(),
+            stop_recording_use_case=self.build_stop_recording_use_case(),
+            analytics_registry=self.build_analytics_session_registry(),
+        )
 
     def build_recording_repository(self) -> IRecordingRepository:
         return self._recording_repository
@@ -381,6 +415,9 @@ class Container:
 
     def build_list_detection_events_use_case(self) -> ListDetectionEventsUseCase:
         return ListDetectionEventsUseCase(self._event_repository)
+
+    def build_clear_detection_events_use_case(self) -> ClearDetectionEventsUseCase:
+        return ClearDetectionEventsUseCase(self._event_repository)
 
     def build_analytics_events_hub(self) -> AnalyticsEventsHub:
         return self._analytics_events_hub

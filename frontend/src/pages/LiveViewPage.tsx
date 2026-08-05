@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import AnalyticsToggle from '../components/AnalyticsToggle';
 import CameraPicker from '../components/CameraPicker';
 import Panel from '../components/Panel';
 import DetectionOverlay from '../features/analytics-console/DetectionOverlay';
@@ -70,30 +71,7 @@ function LiveViewSelected({
     <div className="mx-auto max-w-3xl space-y-4">
       <CameraPicker cameras={cameras} value={selected.id} onChange={(id) => navigate(`/live/${id}`)} />
 
-      <Panel
-        title={selected.name}
-        actions={
-          <label className="flex items-center gap-2 text-sm text-slate-600">
-            Analytics
-            <button
-              type="button"
-              role="switch"
-              aria-checked={analytics.enabled}
-              disabled={analytics.isToggling}
-              onClick={() => (analytics.enabled ? analytics.disable() : analytics.enable())}
-              className={`h-5 w-9 rounded-full transition-colors ${
-                analytics.enabled ? 'bg-emerald-500' : 'bg-slate-300'
-              } disabled:opacity-50`}
-            >
-              <span
-                className={`block h-4 w-4 translate-y-0.5 rounded-full bg-white transition-transform ${
-                  analytics.enabled ? 'translate-x-4' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
-          </label>
-        }
-      >
+      <Panel title={selected.name} actions={<AnalyticsToggle sourceId={selected.id} />}>
         <div className="space-y-3">
           <LiveView
             cameraId={selected.id}

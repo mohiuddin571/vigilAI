@@ -3,6 +3,7 @@ import type {
   CameraConfigUpdateRequest,
   CameraCreateRequest,
   CameraResponse,
+  CameraUpdateRequest,
 } from '../types/camera';
 
 export class ApiError extends Error {
@@ -49,6 +50,28 @@ export async function getCamera(cameraId: string): Promise<CameraResponse> {
     throw new ApiError(await parseErrorDetail(response), response.status);
   }
   return (await response.json()) as CameraResponse;
+}
+
+export async function updateCamera(
+  cameraId: string,
+  payload: CameraUpdateRequest,
+): Promise<CameraResponse> {
+  const response = await fetch(`/cameras/${cameraId}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new ApiError(await parseErrorDetail(response), response.status);
+  }
+  return (await response.json()) as CameraResponse;
+}
+
+export async function deleteCamera(cameraId: string): Promise<void> {
+  const response = await fetch(`/cameras/${cameraId}`, { method: 'DELETE' });
+  if (!response.ok) {
+    throw new ApiError(await parseErrorDetail(response), response.status);
+  }
 }
 
 export async function updateCameraRtspUrl(

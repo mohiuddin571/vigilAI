@@ -30,6 +30,7 @@ Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./
 - [x] Missing Object Detection (M12)
 - [x] License Plate Recognition / OCR (M13)
 - [x] Frontend Integration — unified dashboard (M14)
+- [x] Camera & Event Lifecycle Management — edit/delete camera (cascade), delete recording, clear events, per-camera analytics visibility (post-M14 addendum, T-170–T-176). Backend unit-tested (`backend/tests/unit/application/test_{update_camera,delete_camera,delete_recording,clear_detection_events}.py`); manual end-to-end verification against the running system was not completed this session (dev backend became unresponsive mid-session) — do this before considering it demo-ready.
 
 # In Progress
 

@@ -47,6 +47,8 @@ app.include_router(
         build_get_camera_config_use_case=container.build_get_camera_config_use_case,
         build_update_camera_config_use_case=container.build_update_camera_config_use_case,
         build_update_camera_rtsp_override_use_case=container.build_update_camera_rtsp_override_use_case,
+        build_update_camera_use_case=container.build_update_camera_use_case,
+        build_delete_camera_use_case=container.build_delete_camera_use_case,
     )
 )
 app.include_router(create_stream_debug_router(container.build_debug_stream_use_case()))
@@ -69,12 +71,14 @@ app.include_router(
         container.build_stop_recording_use_case,
         container.build_list_recordings_use_case,
         container.build_get_recording_use_case,
+        container.build_delete_recording_use_case,
     )
 )
 app.include_router(
     create_analytics_router(
         container.build_analytics_session_registry,
         container.build_list_detection_events_use_case,
+        container.build_clear_detection_events_use_case,
     )
 )
 app.include_router(create_analytics_events_router(container.build_analytics_events_hub()))

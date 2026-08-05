@@ -2,6 +2,7 @@ import json
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import delete as sql_delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -77,6 +78,13 @@ class SqlCameraRepository(ICameraRepository):
         row = self._to_row(camera)
         async with self._session_factory() as session:
             await session.merge(row)
+            await session.commit()
+
+    async def delete(self, camera_id: UUID) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                sql_delete(CameraRow).where(CameraRow.id == str(camera_id))  # type: ignore[arg-type]
+            )
             await session.commit()
 
     def _to_row(self, camera: Camera) -> CameraRow:

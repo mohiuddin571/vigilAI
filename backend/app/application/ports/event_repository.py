@@ -25,3 +25,17 @@ class IEventRepository(ABC):
         end: datetime | None = None,
     ) -> list[DetectionEvent]:
         """List events, optionally filtered by camera, event type, and/or time range."""
+
+    @abstractmethod
+    async def delete(
+        self,
+        camera_id: UUID | None = None,
+        event_type: str | None = None,
+        start: datetime | None = None,
+        end: datetime | None = None,
+    ) -> int:
+        """Bulk-delete events matching the same optional filters as `list()` — no filters means
+        every event. Returns the number of rows deleted. One method serves two callers:
+        `ClearDetectionEventsUseCase` (an operator clearing all/filtered events from Event
+        Center) and `DeleteCameraUseCase` (cascading a camera's own events on delete, via
+        `camera_id=` alone)."""

@@ -31,6 +31,19 @@ class CameraCreateRequest(BaseModel):
         return value
 
 
+class CameraUpdateRequest(BaseModel):
+    """PATCH /cameras/{id} body. Every field is optional — an omitted field is left at its
+    current persisted value (`UpdateCameraUseCase`). Distinct from `CameraConfigUpdateRequest`
+    (ONVIF encoder settings: resolution/codec/bitrate/fps) and `CameraRtspOverrideRequest`
+    (the public RTSP override) — this is the camera's own identity/connection fields."""
+
+    name: str | None = Field(default=None, min_length=1)
+    ip_address: str | None = None
+    port: int | None = Field(default=None, gt=0, le=65535)
+    username: str | None = Field(default=None, min_length=1)
+    password: str | None = Field(default=None, min_length=1)
+
+
 class CameraRtspOverrideRequest(BaseModel):
     """Update only the optional public RTSP endpoint for an onboarded camera."""
 

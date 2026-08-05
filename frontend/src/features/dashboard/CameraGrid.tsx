@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import AnalyticsToggle from '../../components/AnalyticsToggle';
 import type { CameraResponse } from '../../types/camera';
 
 interface CameraGridProps {
@@ -9,7 +10,10 @@ interface CameraGridProps {
  * fetched here: starting an MJPEG stream is a stateful side effect on the
  * backend (`streams.py`'s `/mjpeg` handler calls `use_case.execute()`), so
  * the dashboard must not silently start every camera's stream just to
- * render a preview image. */
+ * render a preview image. Each card's `AnalyticsToggle` shows the real,
+ * per-camera enabled state — the Dashboard's stat tile above only ever
+ * showed an approximate derived count with no way to see *which* cameras
+ * or act on it (a real gap, not by design; see AnalyticsToggle's docstring). */
 function CameraGrid({ cameras }: CameraGridProps) {
   if (cameras.length === 0) {
     return (
@@ -37,13 +41,16 @@ function CameraGrid({ cameras }: CameraGridProps) {
           <p className="text-xs text-slate-500">
             {camera.manufacturer ?? 'Unknown manufacturer'} {camera.model ?? ''}
           </p>
-          <div className="mt-3 flex gap-3 text-sm">
-            <Link to={`/live/${camera.id}`} className="text-slate-700 underline">
-              View live
-            </Link>
-            <Link to={`/cameras/${camera.id}`} className="text-slate-700 underline">
-              Configure
-            </Link>
+          <div className="mt-3 flex items-center justify-between">
+            <div className="flex gap-3 text-sm">
+              <Link to={`/live/${camera.id}`} className="text-slate-700 underline">
+                View live
+              </Link>
+              <Link to={`/cameras/${camera.id}`} className="text-slate-700 underline">
+                Configure
+              </Link>
+            </div>
+            <AnalyticsToggle sourceId={camera.id} label="" size="sm" />
           </div>
         </div>
       ))}

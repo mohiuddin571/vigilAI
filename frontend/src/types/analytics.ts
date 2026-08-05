@@ -33,3 +33,8 @@ export interface DetectionEventFilters {
   start?: string;
   end?: string;
 }
+
+/** Response shape for `DELETE /analytics/events` (T-173) — how many rows were removed. */
+export interface ClearEventsResponse {
+  deleted_count: number;
+}

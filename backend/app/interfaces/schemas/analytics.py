@@ -15,6 +15,12 @@ class AnalyticsStatusResponse(BaseModel):
     enabled: bool
 
 
+class ClearEventsResponse(BaseModel):
+    """Response shape for `DELETE /analytics/events` — how many rows were removed."""
+
+    deleted_count: int
+
+
 class DetectionEventResponse(BaseModel):
     """Response/WS-message shape for a single analytics finding (T-083/T-084)."""
 

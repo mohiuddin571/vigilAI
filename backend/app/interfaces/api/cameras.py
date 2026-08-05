@@ -3,10 +3,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, status
 
+from app.application.use_cases.delete_camera import DeleteCameraUseCase
 from app.application.use_cases.get_camera import GetCameraUseCase
 from app.application.use_cases.get_camera_config import GetCameraConfigUseCase
 from app.application.use_cases.list_cameras import ListCamerasUseCase
 from app.application.use_cases.onboard_camera import OnboardCameraUseCase
+from app.application.use_cases.update_camera import UpdateCameraUseCase
 from app.application.use_cases.update_camera_config import UpdateCameraConfigUseCase
 from app.application.use_cases.update_camera_rtsp_override import UpdateCameraRtspOverrideUseCase
 from app.interfaces.schemas.camera import (
@@ -15,6 +17,7 @@ from app.interfaces.schemas.camera import (
     CameraCreateRequest,
     CameraResponse,
     CameraRtspOverrideRequest,
+    CameraUpdateRequest,
 )
 
 
@@ -27,6 +30,8 @@ def create_cameras_router(
     build_update_camera_rtsp_override_use_case: (
         Callable[[], UpdateCameraRtspOverrideUseCase] | None
     ) = None,
+    build_update_camera_use_case: Callable[[], UpdateCameraUseCase] | None = None,
+    build_delete_camera_use_case: Callable[[], DeleteCameraUseCase] | None = None,
 ) -> APIRouter:
     """Build the `/cameras` router from use-case factories supplied by the composition root.
 
@@ -84,5 +89,25 @@ def create_cameras_router(
                 camera_id, body.rtsp_url_override
             )
             return CameraResponse.from_domain(camera)
+
+    if build_update_camera_use_case is not None:
+
+        @router.patch("/{camera_id}", response_model=CameraResponse)
+        async def update_camera(camera_id: UUID, body: CameraUpdateRequest) -> CameraResponse:
+            camera = await build_update_camera_use_case().execute(
+                camera_id,
+                name=body.name,
+                ip_address=body.ip_address,
+                port=body.port,
+                username=body.username,
+                password=body.password,
+            )
+            return CameraResponse.from_domain(camera)
+
+    if build_delete_camera_use_case is not None:
+
+        @router.delete("/{camera_id}", status_code=status.HTTP_204_NO_CONTENT)
+        async def delete_camera(camera_id: UUID) -> None:
+            await build_delete_camera_use_case().execute(camera_id)
 
     return router

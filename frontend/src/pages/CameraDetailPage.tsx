@@ -1,9 +1,14 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { Link, NavLink, Outlet, useOutletContext, useParams } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import ConfirmDialog from '../components/ConfirmDialog';
+import Dialog from '../components/Dialog';
 import Panel from '../components/Panel';
-import ConfigPanel from '../features/camera-onboarding/ConfigPanel';
 import ZoneEditor from '../features/analytics-console/ZoneEditor';
+import ConfigPanel from '../features/camera-onboarding/ConfigPanel';
+import EditCameraForm from '../features/camera-onboarding/EditCameraForm';
 import useCamera from '../hooks/useCamera';
+import { ApiError, deleteCamera } from '../services/camerasApi';
 import type { CameraResponse } from '../types/camera';
 
 const tabLinkClass = ({ isActive }: { isActive: boolean }) =>
@@ -61,8 +66,41 @@ function useCameraContext(): CameraResponse {
 
 export function CameraOverviewTab() {
   const camera = useCameraContext();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteCamera(camera.id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['cameras'] });
+      navigate('/cameras');
+    },
+  });
+
   return (
-    <Panel title="Overview">
+    <Panel
+      title="Overview"
+      actions={
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700"
+          >
+            Edit
+          </button>
+          <button
+            type="button"
+            onClick={() => setConfirmingDelete(true)}
+            className="rounded border border-red-300 px-3 py-1.5 text-sm font-medium text-red-600"
+          >
+            Delete
+          </button>
+        </div>
+      }
+    >
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <dt className="text-slate-500">Status</dt>
         <dd className="text-slate-900">{camera.is_online ? 'Online' : 'Offline'}</dd>
@@ -104,6 +142,29 @@ export function CameraOverviewTab() {
           View recordings
         </Link>
       </div>
+
+      {editing && (
+        <Dialog title={`Edit ${camera.name}`} onClose={() => setEditing(false)}>
+          <EditCameraForm camera={camera} onSuccess={() => setEditing(false)} />
+        </Dialog>
+      )}
+
+      {confirmingDelete && (
+        <ConfirmDialog
+          title="Delete camera"
+          message={`Delete "${camera.name}"? This also permanently deletes its recordings (files and metadata), zones, and analytics events. This cannot be undone.`}
+          isPending={deleteMutation.isPending}
+          error={
+            deleteMutation.error instanceof ApiError
+              ? deleteMutation.error.message
+              : deleteMutation.isError
+                ? 'Failed to delete camera.'
+                : null
+          }
+          onConfirm={() => deleteMutation.mutate()}
+          onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
     </Panel>
   );
 }

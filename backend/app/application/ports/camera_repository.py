@@ -18,3 +18,8 @@ class ICameraRepository(ABC):
 
     @abstractmethod
     async def update(self, camera: Camera) -> None: ...
+
+    @abstractmethod
+    async def delete(self, camera_id: UUID) -> None:
+        """Delete a camera. Idempotent: deleting an id that doesn't exist is not an error —
+        the caller (`DeleteCameraUseCase`) already 404s upfront if the camera is missing."""

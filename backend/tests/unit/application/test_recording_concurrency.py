@@ -72,6 +72,9 @@ class FakeCameraRepository(ICameraRepository):
     async def update(self, camera: Camera) -> None:
         self.cameras[camera.id] = camera
 
+    async def delete(self, camera_id: UUID) -> None:
+        self.cameras.pop(camera_id, None)
+
 
 class FakeStreamCameraGateway(ICameraGateway):
     async def connect(self, ip_address: str, username: str, password: str, port: int = 80) -> None:
