@@ -13,12 +13,19 @@ class AnalyticsZone:
     (M11/T-111) — the frontend zone editor normalizes drawn pixel points on
     save, so no coordinate conversion is needed at containment-check time
     (docs/TECHNICAL_DECISIONS.md TD-28).
+
+    `missing_object_threshold_seconds` (M12/T-120, docs/TECHNICAL_DECISIONS.md
+    TD-29) is additive and optional, unlike `dwell_threshold_seconds`: a zone
+    always participates in loitering detection, but missing-object monitoring
+    is opt-in per zone — `None` (the default) means `MissingObjectDetector`
+    skips this zone entirely.
     """
 
     camera_id: UUID
     name: str
     polygon: list[tuple[float, float]]
     dwell_threshold_seconds: float
+    missing_object_threshold_seconds: float | None = None
     id: UUID = field(default_factory=uuid4)
 
     def __post_init__(self) -> None:
@@ -32,4 +39,12 @@ class AnalyticsZone:
             raise InvalidDomainStateError(
                 "AnalyticsZone dwell_threshold_seconds must be > 0, got "
                 f"{self.dwell_threshold_seconds}"
+            )
+        if (
+            self.missing_object_threshold_seconds is not None
+            and self.missing_object_threshold_seconds <= 0
+        ):
+            raise InvalidDomainStateError(
+                "AnalyticsZone missing_object_threshold_seconds must be > 0 if set, got "
+                f"{self.missing_object_threshold_seconds}"
             )

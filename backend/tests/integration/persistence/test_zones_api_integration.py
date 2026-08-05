@@ -52,6 +52,7 @@ async def test_zone_persists_and_is_retrievable_per_camera(tmp_path: Path) -> No
                 "name": "Entrance",
                 "polygon": [[0.1, 0.1], [0.9, 0.1], [0.9, 0.9], [0.1, 0.9]],
                 "dwell_threshold_seconds": 5.0,
+                "missing_object_threshold_seconds": 30.0,
             },
         )
         assert create_response.status_code == 201
@@ -64,6 +65,7 @@ async def test_zone_persists_and_is_retrievable_per_camera(tmp_path: Path) -> No
         assert listed[0]["id"] == zone_id
         assert listed[0]["name"] == "Entrance"
         assert listed[0]["dwell_threshold_seconds"] == 5.0
+        assert listed[0]["missing_object_threshold_seconds"] == 30.0
 
         get_response = await client.get(f"/zones/{zone_id}")
         assert get_response.status_code == 200
@@ -87,11 +89,13 @@ async def test_update_zone_persists_the_change(tmp_path: Path) -> None:
         zone_id = create_response.json()["id"]
 
         update_response = await client.patch(
-            f"/zones/{zone_id}", json={"dwell_threshold_seconds": 12.0}
+            f"/zones/{zone_id}",
+            json={"dwell_threshold_seconds": 12.0, "missing_object_threshold_seconds": 20.0},
         )
 
         assert update_response.status_code == 200
         assert update_response.json()["dwell_threshold_seconds"] == 12.0
+        assert update_response.json()["missing_object_threshold_seconds"] == 20.0
         assert update_response.json()["name"] == "Entrance"
 
 

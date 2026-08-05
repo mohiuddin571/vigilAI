@@ -58,6 +58,7 @@ from app.domain.entities.stream_profile import StreamProfile
 from app.domain.exceptions import CameraNotFoundError, UnsupportedConfigurationError
 from app.infrastructure.analytics.color_detector import ColorDetector
 from app.infrastructure.analytics.loitering_detector import LoiteringDetector
+from app.infrastructure.analytics.missing_object_detector import MissingObjectDetector
 from app.infrastructure.analytics.orchestrator import AnalyticsOrchestrator
 from app.infrastructure.analytics.yolo_detector import YoloObjectDetector
 from app.infrastructure.messaging.event_bus import EventBus
@@ -125,11 +126,12 @@ class Container:
         self._event_bus.subscribe(self._analytics_events_hub.broadcast)
         self._analytics_orchestrator = AnalyticsOrchestrator(
             [
-                # Order matters: ColorDetector and LoiteringDetector both read
-                # the bounding boxes/track ids YoloObjectDetector writes into
-                # `context` for this same frame (T-100/T-113,
-                # docs/TECHNICAL_DECISIONS.md TD-27/TD-28) — both must run
-                # after YoloObjectDetector in this list.
+                # Order matters: ColorDetector, LoiteringDetector, and
+                # MissingObjectDetector all read the bounding boxes/track ids
+                # YoloObjectDetector writes into `context` for this same frame
+                # (T-100/T-113/T-121, docs/TECHNICAL_DECISIONS.md
+                # TD-27/TD-28/TD-29) — all three must run after
+                # YoloObjectDetector in this list.
                 YoloObjectDetector(
                     model_path=str(settings.yolo_model_path),
                     confidence_threshold=settings.yolo_confidence_threshold,
@@ -138,6 +140,7 @@ class Container:
                 ),
                 ColorDetector(),
                 LoiteringDetector(zone_repository=self._zone_repository),
+                MissingObjectDetector(zone_repository=self._zone_repository),
             ]
         )
         self._analytics_session_registry = AnalyticsSessionRegistry(

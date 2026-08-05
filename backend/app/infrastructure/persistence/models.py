@@ -61,6 +61,7 @@ class AnalyticsZoneRow(SQLModel, table=True):
     name: str
     polygon_json: str
     dwell_threshold_seconds: float
+    missing_object_threshold_seconds: float | None = None
 
 
 class DetectionEventRow(SQLModel, table=True):
