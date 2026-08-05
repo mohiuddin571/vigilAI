@@ -79,5 +79,25 @@ class Settings(BaseSettings):
     # inference time rather than this project guessing the deployment box.
     yolo_device: str | None = None
 
+    # License Plate Recognition / OCR (M13, T-131/T-133;
+    # docs/TECHNICAL_DECISIONS.md TD-30). `easyocr_model_storage_dir` mirrors
+    # `yolo_model_path`'s convention of caching under the gitignored
+    # storage/models/ (docs/FOLDER_STRUCTURE.md already names "EasyOCR model
+    # cache" as belonging there). `easyocr_gpu` defaults to False: EasyOCR's
+    # Apple-Silicon MPS support is inconsistent across versions (unlike
+    # Ultralytics' own auto device selection, TD-25), so this defaults to the
+    # deterministic CPU path rather than assuming MPS acceleration works.
+    easyocr_languages: list[str] = ["en"]
+    easyocr_model_storage_dir: Path = _REPO_ROOT / "storage" / "models" / "easyocr"
+    easyocr_gpu: bool = False
+    # Reads below this confidence are treated as "no text could be read"
+    # (ILicensePlateReader's own `None` contract) rather than emitted as a
+    # low-quality DetectionEvent.
+    easyocr_min_confidence: float = 0.3
+    # Bounded, drop-oldest queue between plate localization and the
+    # background OCR worker task (T-133) — same pattern as
+    # `stream_worker_frame_queue_max_size` (M2, TD-20).
+    lpr_ocr_queue_max_size: int = 10
+
 
 settings = Settings()  # type: ignore[call-arg]
