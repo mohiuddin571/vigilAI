@@ -35,6 +35,7 @@ def create_zones_router(
             name=body.name,
             polygon=body.polygon,
             dwell_threshold_seconds=body.dwell_threshold_seconds,
+            missing_object_threshold_seconds=body.missing_object_threshold_seconds,
         )
         return ZoneResponse.from_domain(zone)
 
@@ -55,6 +56,7 @@ def create_zones_router(
             name=body.name,
             polygon=body.polygon,
             dwell_threshold_seconds=body.dwell_threshold_seconds,
+            missing_object_threshold_seconds=body.missing_object_threshold_seconds,
         )
         return ZoneResponse.from_domain(zone)
 

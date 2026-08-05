@@ -21,6 +21,7 @@ class UpdateZoneUseCase:
         name: str | None = None,
         polygon: list[tuple[float, float]] | None = None,
         dwell_threshold_seconds: float | None = None,
+        missing_object_threshold_seconds: float | None = None,
     ) -> AnalyticsZone:
         zone = await self._zone_repository.get(zone_id)
         if zone is None:
@@ -34,6 +35,11 @@ class UpdateZoneUseCase:
                 dwell_threshold_seconds
                 if dwell_threshold_seconds is not None
                 else zone.dwell_threshold_seconds
+            ),
+            missing_object_threshold_seconds=(
+                missing_object_threshold_seconds
+                if missing_object_threshold_seconds is not None
+                else zone.missing_object_threshold_seconds
             ),
         )
         await self._zone_repository.update(updated)

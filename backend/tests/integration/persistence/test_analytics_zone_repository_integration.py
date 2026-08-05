@@ -23,6 +23,7 @@ async def test_add_get_round_trip_preserves_polygon_and_threshold(tmp_path: Path
         name="Entrance",
         polygon=[(0.1, 0.1), (0.9, 0.1), (0.9, 0.9), (0.1, 0.9)],
         dwell_threshold_seconds=5.0,
+        missing_object_threshold_seconds=30.0,
     )
 
     await repository.add(zone)
@@ -34,6 +35,25 @@ async def test_add_get_round_trip_preserves_polygon_and_threshold(tmp_path: Path
     assert fetched.name == "Entrance"
     assert fetched.polygon == [(0.1, 0.1), (0.9, 0.1), (0.9, 0.9), (0.1, 0.9)]
     assert fetched.dwell_threshold_seconds == 5.0
+    assert fetched.missing_object_threshold_seconds == 30.0
+
+
+async def test_add_get_round_trip_preserves_null_missing_object_threshold(
+    tmp_path: Path,
+) -> None:
+    repository = await _open_repository(tmp_path / "zones.db")
+    zone = AnalyticsZone(
+        camera_id=uuid4(),
+        name="Entrance",
+        polygon=[(0.1, 0.1), (0.9, 0.1), (0.9, 0.9), (0.1, 0.9)],
+        dwell_threshold_seconds=5.0,
+    )
+
+    await repository.add(zone)
+    fetched = await repository.get(zone.id)
+
+    assert fetched is not None
+    assert fetched.missing_object_threshold_seconds is None
 
 
 async def test_get_returns_none_for_unknown_id(tmp_path: Path) -> None:

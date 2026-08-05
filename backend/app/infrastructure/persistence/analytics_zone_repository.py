@@ -57,6 +57,7 @@ class SqlAnalyticsZoneRepository(IAnalyticsZoneRepository):
             name=zone.name,
             polygon_json=json.dumps(zone.polygon),
             dwell_threshold_seconds=zone.dwell_threshold_seconds,
+            missing_object_threshold_seconds=zone.missing_object_threshold_seconds,
         )
 
     def _to_entity(self, row: AnalyticsZoneRow) -> AnalyticsZone:
@@ -66,4 +67,5 @@ class SqlAnalyticsZoneRepository(IAnalyticsZoneRepository):
             name=row.name,
             polygon=[(float(x), float(y)) for x, y in json.loads(row.polygon_json)],
             dwell_threshold_seconds=row.dwell_threshold_seconds,
+            missing_object_threshold_seconds=row.missing_object_threshold_seconds,
         )

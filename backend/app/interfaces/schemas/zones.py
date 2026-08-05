@@ -12,6 +12,10 @@ class ZoneCreateRequest(BaseModel):
     name: str = Field(min_length=1)
     polygon: list[tuple[float, float]] = Field(min_length=3)
     dwell_threshold_seconds: float = Field(gt=0)
+    # Opt-in per zone (M12/T-120): omitted/null means MissingObjectDetector
+    # skips this zone entirely, unlike dwell_threshold_seconds which every
+    # zone always has.
+    missing_object_threshold_seconds: float | None = Field(default=None, gt=0)
 
 
 class ZoneUpdateRequest(BaseModel):
@@ -21,6 +25,7 @@ class ZoneUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1)
     polygon: list[tuple[float, float]] | None = Field(default=None, min_length=3)
     dwell_threshold_seconds: float | None = Field(default=None, gt=0)
+    missing_object_threshold_seconds: float | None = Field(default=None, gt=0)
 
 
 class ZoneResponse(BaseModel):
@@ -29,6 +34,7 @@ class ZoneResponse(BaseModel):
     name: str
     polygon: list[tuple[float, float]]
     dwell_threshold_seconds: float
+    missing_object_threshold_seconds: float | None = None
 
     @classmethod
     def from_domain(cls, zone: AnalyticsZone) -> "ZoneResponse":
@@ -38,4 +44,5 @@ class ZoneResponse(BaseModel):
             name=zone.name,
             polygon=zone.polygon,
             dwell_threshold_seconds=zone.dwell_threshold_seconds,
+            missing_object_threshold_seconds=zone.missing_object_threshold_seconds,
         )

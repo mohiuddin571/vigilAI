@@ -27,14 +27,14 @@ Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./
 - [x] Object Tracking (ByteTrack, used by M9/M11)
 - [x] Color Detection (M10)
 - [x] Loitering Detection (M11)
+- [x] Missing Object Detection (M12)
 
 # In Progress
 
-- [ ] _Nothing yet. Next up: Missing Object Detection (M12)._
+- [ ] _Nothing yet. Next up: License Plate Recognition / OCR (M13)._
 
 # Remaining
 
-- [ ] Missing Object Detection (M12)
 - [ ] License Plate Recognition / OCR (M13)
 - [ ] Frontend Integration — unified dashboard (M14)
 - [ ] Testing, Hardening & Final Documentation Polish (M15)

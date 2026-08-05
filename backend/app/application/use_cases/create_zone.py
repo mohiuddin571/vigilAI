@@ -16,12 +16,14 @@ class CreateZoneUseCase:
         name: str,
         polygon: list[tuple[float, float]],
         dwell_threshold_seconds: float,
+        missing_object_threshold_seconds: float | None = None,
     ) -> AnalyticsZone:
         zone = AnalyticsZone(
             camera_id=camera_id,
             name=name,
             polygon=polygon,
             dwell_threshold_seconds=dwell_threshold_seconds,
+            missing_object_threshold_seconds=missing_object_threshold_seconds,
         )
         await self._zone_repository.add(zone)
         return zone

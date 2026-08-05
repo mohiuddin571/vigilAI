@@ -44,6 +44,18 @@ async def test_create_zone_persists_and_returns_it() -> None:
     assert repository.zones[zone.id] is zone
     assert zone.camera_id == camera_id
     assert zone.dwell_threshold_seconds == 5.0
+    assert zone.missing_object_threshold_seconds is None
+
+
+async def test_create_zone_accepts_missing_object_threshold() -> None:
+    repository = FakeZoneRepository()
+    use_case = CreateZoneUseCase(repository)
+
+    zone = await use_case.execute(
+        uuid4(), "Entrance", _POLYGON, 5.0, missing_object_threshold_seconds=30.0
+    )
+
+    assert zone.missing_object_threshold_seconds == 30.0
 
 
 async def test_list_zones_by_camera_returns_only_matching_camera() -> None:
@@ -92,6 +104,19 @@ async def test_update_zone_applies_only_provided_fields() -> None:
     assert updated.polygon == _POLYGON
     assert updated.dwell_threshold_seconds == 9.0
     assert repository.zones[zone.id].dwell_threshold_seconds == 9.0
+
+
+async def test_update_zone_applies_missing_object_threshold() -> None:
+    zone = AnalyticsZone(
+        camera_id=uuid4(), name="Entrance", polygon=_POLYGON, dwell_threshold_seconds=5.0
+    )
+    repository = FakeZoneRepository([zone])
+    use_case = UpdateZoneUseCase(repository)
+
+    updated = await use_case.execute(zone.id, missing_object_threshold_seconds=45.0)
+
+    assert updated.missing_object_threshold_seconds == 45.0
+    assert repository.zones[zone.id].missing_object_threshold_seconds == 45.0
 
 
 async def test_update_zone_raises_not_found_for_unknown_id() -> None:

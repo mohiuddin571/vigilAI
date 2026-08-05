@@ -8,7 +8,7 @@ from app.application.ports.detector_plugin import IDetectorPlugin
 from app.domain.entities.analytics_zone import AnalyticsZone
 from app.domain.entities.detection_event import DetectionEvent
 from app.domain.entities.frame import Frame
-from app.domain.value_objects.bounding_box import BoundingBox
+from app.infrastructure.analytics.geometry import foot_point, point_in_polygon
 from app.infrastructure.analytics.yolo_detector import EVENTS_BY_SOURCE_CONTEXT_KEY
 
 # Namespaced per docs/ARCHITECTURE.md §6.4's guidance ("plugins may store
@@ -28,30 +28,6 @@ class _DwellState:
     fired: bool
 
 
-def _point_in_polygon(point: tuple[float, float], polygon: list[tuple[float, float]]) -> bool:
-    """Standard ray-casting (Jordan curve) point-in-polygon test.
-
-    Pure Python, no new dependency (AGENTS.md § Dependency Rules) — `polygon`
-    and `point` are both in the same normalized `[0, 1]` space `BoundingBox`
-    already uses, so no coordinate conversion is needed here.
-    """
-    x, y = point
-    inside = False
-    x1, y1 = polygon[-1]
-    for x2, y2 in polygon:
-        if (y1 > y) != (y2 > y) and x < (x2 - x1) * (y - y1) / (y2 - y1) + x1:
-            inside = not inside
-        x1, y1 = x2, y2
-    return inside
-
-
-def _foot_point(box: BoundingBox) -> tuple[float, float]:
-    """The bounding box's bottom-center point — where a tracked object actually
-    stands, unlike the box's visual center (which sits on a person's torso,
-    not their feet). This is the point tested for zone containment."""
-    return ((box.x_min + box.x_max) / 2, box.y_max)
-
-
 class LoiteringDetector(IDetectorPlugin):
     """Flags a tracked object that dwells inside a configured `AnalyticsZone`
     past its threshold (T-113).
@@ -64,8 +40,8 @@ class LoiteringDetector(IDetectorPlugin):
     comment).
 
     For each of the source camera's zones, tests each tracked detection's
-    foot point (`_foot_point`) for containment (`_point_in_polygon`) and
-    accumulates dwell time per `(source_id, zone_id, track_id)` in `context`.
+    foot point (`geometry.foot_point`) for containment (`geometry.point_in_polygon`)
+    and accumulates dwell time per `(source_id, zone_id, track_id)` in `context`.
     Dwell is measured using `Frame.timestamp`, not wall-clock time at
     processing time (unlike `YoloObjectDetector`/`ColorDetector`'s
     `datetime.now(UTC)` for their own instantaneous, frame-scoped findings) —
@@ -132,7 +108,7 @@ class LoiteringDetector(IDetectorPlugin):
             track_id = event.metadata.get("track_id")
             if track_id is None or event.bounding_box is None:
                 continue
-            if _point_in_polygon(_foot_point(event.bounding_box), zone.polygon):
+            if point_in_polygon(foot_point(event.bounding_box), zone.polygon):
                 in_zone_now[track_id] = event
 
         events: list[DetectionEvent] = []
