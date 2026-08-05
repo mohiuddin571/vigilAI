@@ -19,6 +19,16 @@ class IDetectorPlugin(ABC):
     being allowed internal state via `context`. Owned and shared by the
     `AnalyticsOrchestrator` across the frames of one pipeline run — plugins
     must never read another plugin's private key out of it.
+
+    One narrow, documented exception (T-100, docs/TECHNICAL_DECISIONS.md
+    TD-27): `YoloObjectDetector` publishes the current frame's own
+    `DetectionEvent`s into `context` under a reserved, exported key
+    (`yolo_object_detector.EVENTS_BY_SOURCE_CONTEXT_KEY`, keyed by
+    `frame.source_id`) specifically so `ColorDetector` can read the same
+    frame's bounding boxes without re-running detection. This is a same-frame
+    producer/consumer handoff between two specific, named plugins via one
+    specific, named key — not a general license for a plugin to read
+    another's private state.
     """
 
     @property

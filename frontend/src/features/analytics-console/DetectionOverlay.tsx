@@ -23,6 +23,13 @@ interface DetectionOverlayProps {
  * by the single-threaded pipeline — so grouping by "did frame_sequence
  * change since the last event" reconstructs "this frame's full box set"
  * without the backend needing to batch them itself.
+ *
+ * `ColorDetector` (T-100/T-101) publishes its own `color_detection.*`
+ * events alongside each frame's `object_detection.*` events rather than
+ * mutating them (docs/TECHNICAL_DECISIONS.md TD-27) — one box is still
+ * rendered per detected object; the color is merged into that box's label
+ * by matching `color_detection.*` events back to their source detection via
+ * `metadata.source_event_id`.
  */
 function DetectionOverlay({ cameraId }: DetectionOverlayProps) {
   const [detections, setDetections] = useState<DetectionEventResponse[]>([]);
@@ -54,12 +61,28 @@ function DetectionOverlay({ cameraId }: DetectionOverlayProps) {
     return () => socket.close();
   }, [cameraId]);
 
+  const objectDetections = detections.filter((detection) =>
+    detection.event_type.startsWith('object_detection.'),
+  );
+  const colorLabelBySourceEventId = new Map<string, string>();
+  for (const detection of detections) {
+    if (!detection.event_type.startsWith('color_detection.')) continue;
+    const sourceEventId = detection.metadata.source_event_id as string | undefined;
+    const colorLabel = detection.metadata.color_label as string | undefined;
+    if (sourceEventId && colorLabel) {
+      colorLabelBySourceEventId.set(sourceEventId, colorLabel);
+    }
+  }
+
   return (
     <div className="pointer-events-none absolute inset-0">
-      {detections.map((detection) => {
+      {objectDetections.map((detection) => {
         const box = detection.bounding_box;
         if (!box) return null;
-        const label = (detection.metadata.class_label as string | undefined) ?? detection.event_type;
+        const classLabel =
+          (detection.metadata.class_label as string | undefined) ?? detection.event_type;
+        const colorLabel = colorLabelBySourceEventId.get(detection.id);
+        const label = colorLabel ? `${colorLabel} ${classLabel}` : classLabel;
         return (
           <div
             key={detection.id}
