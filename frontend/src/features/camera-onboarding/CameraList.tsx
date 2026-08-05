@@ -1,14 +1,28 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { listCameras, updateCameraRtspUrl } from '../../services/camerasApi';
 import ConfigPanel from './ConfigPanel';
 
-function CameraList() {
+interface CameraListProps {
+  /** Client-side name/IP substring filter (docs/UI_UX_DESIGN.md §5.9) — no
+   * backend search endpoint exists, so this filters the already-fetched list. */
+  nameFilter?: string;
+}
+
+function CameraList({ nameFilter = '' }: CameraListProps) {
   const queryClient = useQueryClient();
   const { data, isLoading, isError } = useQuery({
     queryKey: ['cameras'],
     queryFn: listCameras,
   });
+  const needle = nameFilter.trim().toLowerCase();
+  const filtered = needle
+    ? data?.filter(
+        (camera) =>
+          camera.name.toLowerCase().includes(needle) || camera.ip_address.includes(needle),
+      )
+    : data;
   const [openProfile, setOpenProfile] = useState<{ cameraId: string; profileId: string } | null>(
     null,
   );
@@ -24,13 +38,21 @@ function CameraList() {
   if (!data || data.length === 0) {
     return <p className="text-sm text-slate-500">No cameras onboarded yet.</p>;
   }
+  if (!filtered || filtered.length === 0) {
+    return <p className="text-sm text-slate-500">No cameras match “{nameFilter}”.</p>;
+  }
 
   return (
     <ul className="divide-y divide-slate-200">
-      {data.map((camera) => (
+      {filtered.map((camera) => (
         <li key={camera.id} className="py-3">
           <div className="flex items-center justify-between">
-            <span className="font-medium text-slate-900">{camera.name}</span>
+            <Link
+              to={`/cameras/${camera.id}`}
+              className="font-medium text-slate-900 hover:underline"
+            >
+              {camera.name}
+            </Link>
             <span
               className={`h-2.5 w-2.5 rounded-full ${camera.is_online ? 'bg-emerald-500' : 'bg-slate-300'}`}
               title={camera.is_online ? 'Online' : 'Offline'}

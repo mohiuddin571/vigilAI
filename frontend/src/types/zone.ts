@@ -9,6 +9,7 @@ export interface ZoneResponse {
   name: string;
   polygon: ZonePoint[];
   dwell_threshold_seconds: number;
+  missing_object_threshold_seconds: number | null;
 }
 
 export interface ZoneCreateRequest {
@@ -16,4 +17,13 @@ export interface ZoneCreateRequest {
   name: string;
   polygon: ZonePoint[];
   dwell_threshold_seconds: number;
+  missing_object_threshold_seconds?: number | null;
+}
+
+/** PATCH /zones/{id} body — every field optional, an omitted field keeps its current value. */
+export interface ZoneUpdateRequest {
+  name?: string;
+  polygon?: ZonePoint[];
+  dwell_threshold_seconds?: number;
+  missing_object_threshold_seconds?: number | null;
 }

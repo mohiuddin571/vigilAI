@@ -1,4 +1,4 @@
-import type { ZoneCreateRequest, ZoneResponse } from '../types/zone';
+import type { ZoneCreateRequest, ZoneResponse, ZoneUpdateRequest } from '../types/zone';
 import { ApiError, parseErrorDetail } from './camerasApi';
 
 export async function listZonesByCamera(cameraId: string): Promise<ZoneResponse[]> {
@@ -13,6 +13,18 @@ export async function listZonesByCamera(cameraId: string): Promise<ZoneResponse[
 export async function createZone(payload: ZoneCreateRequest): Promise<ZoneResponse> {
   const response = await fetch('/zones', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new ApiError(await parseErrorDetail(response), response.status);
+  }
+  return (await response.json()) as ZoneResponse;
+}
+
+export async function updateZone(zoneId: string, payload: ZoneUpdateRequest): Promise<ZoneResponse> {
+  const response = await fetch(`/zones/${zoneId}`, {
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });

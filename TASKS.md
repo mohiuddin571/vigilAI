@@ -29,14 +29,14 @@ Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./
 - [x] Loitering Detection (M11)
 - [x] Missing Object Detection (M12)
 - [x] License Plate Recognition / OCR (M13)
+- [x] Frontend Integration — unified dashboard (M14)
 
 # In Progress
 
-- [ ] _Nothing yet. Next up: Frontend Integration — unified dashboard (M14)._
+- [ ] _Nothing yet. Next up: Testing, Hardening & Final Documentation Polish (M15)._
 
 # Remaining
 
-- [ ] Frontend Integration — unified dashboard (M14)
 - [ ] Testing, Hardening & Final Documentation Polish (M15)
 - [ ] Docker (M16, stretch — time-permitting, explicitly last)
 - [ ] Demo Preparation (not a formal milestone — see note below)

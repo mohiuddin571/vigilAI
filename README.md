@@ -52,7 +52,7 @@ The full picture, including diagrams and key flows, is in [ARCHITECTURE.md](./do
 | Layer | Technology |
 |---|---|
 | Backend | Python, FastAPI |
-| Frontend | React, TypeScript, Vite, Tailwind CSS |
+| Frontend | React, TypeScript, Vite, Tailwind CSS, React Router, Zustand + React Query |
 | Object detection / classification / tracking | Ultralytics YOLOv8 (ByteTrack) |
 | OCR (license plates) | EasyOCR |
 | Video ingestion / recording | FFmpeg, OpenCV |
@@ -134,7 +134,7 @@ npm install    # only needed once, or after pulling new changes
 npm run dev
 ```
 
-Leave this terminal running too. Open **http://localhost:5173** in your browser — you should see a "VigilAI" card reading "Backend: ok". The frontend proxies `/health` to the backend on port 8000, so the backend must already be running (Step 4) for this to show `ok` instead of an error.
+Leave this terminal running too. Open **http://localhost:5173** in your browser — you should see the VigilAI Dashboard (stat tiles, a camera grid, recent events), with a sidebar for Dashboard / Cameras / Live View / Recordings / Event Center (M14). The frontend proxies `/cameras`, `/streams`, `/recordings`, `/analytics`, `/zones`, and `/ws` to the backend on port 8000, so the backend must already be running (Step 4) for any of these to load instead of erroring.
 
 ### Step 6 — Run the local MP4 debug stream (no camera needed)
 
@@ -152,7 +152,7 @@ Note: `backend/tests/fixtures/sample.mp4` is a synthetically generated clip (`sc
 
 ### Step 7 — Live view of an onboarded camera (M5, needs a real or ONVIF-simulator camera)
 
-With a camera onboarded (via the frontend's "Add Camera" form, or `POST /cameras` directly — see M3 above), open the frontend (Step 5) — the "Live View" card lists onboarded cameras and shows an `<img>`-based MJPEG preview with a connected/reconnecting/failed indicator once you click **Connect**. Equivalently, from the API directly:
+With a camera onboarded (via the frontend's "Add Camera" dialog on `/cameras`, or `POST /cameras` directly — see M3 above), open the frontend's **Live View** (Step 5) — pick the camera from the dropdown to land on `/live/{camera_id}`, which shows an `<img>`-based MJPEG preview with a connected/reconnecting/failed indicator once you click **Connect**. Equivalently, from the API directly:
 
 ```bash
 curl -X POST http://localhost:8000/streams/{camera_id}/start
@@ -165,7 +165,7 @@ The status WebSocket (`ws://localhost:8000/ws/streams/{camera_id}/status`) pushe
 
 ### Step 8 — Object detection overlay (M9, works on the MP4 demo or a real camera)
 
-Once a stream is connected (Step 7, or the MP4 debug stream's `source_id="mp4-demo"`), the frontend's Live View automatically enables analytics for that source and overlays live YOLO detection boxes/labels. The very first detection anywhere on a machine downloads `yolov8n.pt` (~6MB) into `storage/models/` (gitignored, cached thereafter) — this needs network access once. Equivalently, from the API directly:
+Once a stream is connected (Step 7, or the MP4 debug stream's `source_id="mp4-demo"`), flip the **Analytics** toggle on the frontend's Live View (M14) to enable analytics for that source and overlay live YOLO detection boxes/labels — the toggle is explicit rather than automatic, so analytics can also be turned back off from the same screen. The very first detection anywhere on a machine downloads `yolov8n.pt` (~6MB) into `storage/models/` (gitignored, cached thereafter) — this needs network access once. Equivalently, from the API directly:
 
 ```bash
 curl -X POST http://localhost:8000/analytics/{source_id}/enable   # source_id: "mp4-demo" or a camera's id
@@ -201,6 +201,7 @@ This repository is documentation-first: the design was fully specified before im
 | [ARCHITECTURE.md](./docs/ARCHITECTURE.md) | Component responsibilities, diagrams, key flows, technology rationale |
 | [FOLDER_STRUCTURE.md](./docs/FOLDER_STRUCTURE.md) | Repo layout, folder ownership, dependency direction rules |
 | [IMPLEMENTATION_PLAN.md](./docs/IMPLEMENTATION_PLAN.md) | Milestones — goals, deliverables, acceptance criteria, dependencies |
+| [UI_UX_DESIGN.md](./docs/UI_UX_DESIGN.md) | Frontend navigation, sitemap, screen-by-screen UX and API mappings (M14) |
 | [TASK_BACKLOG.md](./docs/TASK_BACKLOG.md) | Fine-grained prioritized backlog with Definition of Done per task |
 | [TECHNICAL_DECISIONS.md](./docs/TECHNICAL_DECISIONS.md) | Every significant technical decision, alternatives considered, tradeoffs |
 | [PROMPTING_GUIDE.md](./docs/PROMPTING_GUIDE.md) | How implementation prompts for this project should be written |

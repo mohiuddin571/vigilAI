@@ -43,6 +43,14 @@ export async function createCamera(payload: CameraCreateRequest): Promise<Camera
   return (await response.json()) as CameraResponse;
 }
 
+export async function getCamera(cameraId: string): Promise<CameraResponse> {
+  const response = await fetch(`/cameras/${cameraId}`);
+  if (!response.ok) {
+    throw new ApiError(await parseErrorDetail(response), response.status);
+  }
+  return (await response.json()) as CameraResponse;
+}
+
 export async function updateCameraRtspUrl(
   cameraId: string,
   rtspUrlOverride: string | null,
