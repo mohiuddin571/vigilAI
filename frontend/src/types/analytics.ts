@@ -22,3 +22,14 @@ export interface AnalyticsStatusResponse {
   source_id: string;
   enabled: boolean;
 }
+
+/** Filters for `GET /analytics/events` (T-085) — all optional. `eventType` must be an
+ * exact stored `event_type` value (e.g. `"loitering_detection.dwell_exceeded"`), since
+ * the backend filter is an exact match, not a prefix — category-level filtering (e.g.
+ * "every loitering event regardless of outcome") is done client-side instead. */
+export interface DetectionEventFilters {
+  cameraId?: string;
+  eventType?: string;
+  start?: string;
+  end?: string;
+}

@@ -597,6 +597,25 @@ Each entry is a lightweight ADR (Architecture Decision Record): **Decision → C
 
 ---
 
+## TD-31: M14 Frontend routing — `react-router-dom`; `zustand` finally installed
+
+**Decision**: `react-router-dom@7.18.2` (plain client-side/"declarative mode" — `createBrowserRouter`, no RSC/framework-mode APIs) is added to `frontend/package.json` to give M14's screens (`docs/UI_UX_DESIGN.md` §3) real, bookmarkable, back-button-correct URLs — `/cameras/:id/zones`, `/live/:cameraId`, `/recordings?camera=&start=&end=`, etc. Also: `zustand`, already named as this project's local-UI-state tool by TD-12, is installed for the first time here — TD-12 fixed the *decision* during M0 scaffolding, but M0–M13's frontend work never actually needed cross-cutting local UI state (each milestone's feature was self-contained), so the dependency was never added to `package.json`. M14 is the first milestone with real cross-screen local state (Event Center's unread badge needs to persist while the user is on a different screen; Live View's last-selected camera should survive navigating away and back).
+
+**Context**: Before this milestone, `frontend/src/App.tsx` was one component tree with local `useState` for "which camera is selected" — no router at all. M14's screen count (8, per `docs/UI_UX_DESIGN.md` §4) and nested tabs (Camera Detail → Overview/Configuration/Zones) make that unworkable: a hand-rolled state-based tab switcher can't produce a correct browser-back stack or a shareable URL for "camera X's zones tab," and Event Center's "jump to Recordings pre-filtered to this camera/time" flow (`docs/UI_UX_DESIGN.md` §7 Flow D) specifically depends on the destination screen being able to read filter state back out of its own URL.
+
+**Alternatives considered**:
+- *Zustand-backed hand-rolled router* (a store holding `{screen, params}`, switched on in `App.tsx`) — zero new dependency, but reimplements history/back-button semantics `react-router-dom` already gets right, and produces no real, shareable URL (`window.location` never changes), which breaks the bookmarkable-URL requirement the design doc's flows depend on.
+- *`@tanstack/react-router`* — type-safe and actively developed, but this project already has zero prior exposure to it versus `react-router-dom`'s status as the de facto standard for a plain Vite SPA of this size; no advantage here large enough to justify the unfamiliarity cost.
+- *TanStack Router's file-based routing / Next.js* — both assume a build/framework structure this project's Vite+Express-free setup doesn't have; adopting either would mean restructuring far more than M14's actual scope.
+
+**Version pin and a real finding, not an assumption**: `npm audit` was checked directly against the installed tree, not skipped. `react-router-dom@latest` (7.18.2, what `npm install react-router-dom` resolves to today) flags one high-severity advisory, [GHSA-qwww-vcr4-c8h2](https://github.com/advisories/GHSA-qwww-vcr4-c8h2) ("RSC Mode CSRF Bypass") — read directly, its own text states "this only affects your application if you are using the unstable RSC APIs," which this project never enables (no `<RSCStaticRouter>`/`unstable_RouterProvider` RSC entry points anywhere in this codebase, no server components). Downgrading to sidestep it (`npm audit fix --force` → `7.11.0`) was tried and rejected: `7.11.0` reintroduces multiple *other* high-severity, non-RSC advisories that do apply to plain `BrowserRouter` usage (open-redirect XSS, missing protocol validation, inefficient-route-matching DoS — all fixed by the 7.18.0 release line). `7.18.2` is the strictly better choice: it carries zero applicable vulnerabilities for this project's actual usage pattern, and the one advisory `npm audit` still reports against it is confirmed inapplicable rather than silently ignored.
+
+**Tradeoffs**: One more runtime dependency in a project that already committed to a minimal stack (TD-12); accepted because the URL-addressability requirement is real and growing (8 screens, nested tabs, deep links) rather than speculative. `zustand`'s footprint is intentionally kept to one small store (`frontend/src/store/uiStore.ts`: last-viewed camera, unread event count) — not a general-purpose replacement for React Query's server-state cache, consistent with TD-12's original division of responsibility.
+
+**Future enhancement**: None anticipated for routing; revisit only if this project ever adopts SSR or React Router's framework/RSC mode, at which point GHSA-qwww-vcr4-c8h2 becomes directly relevant and the pin needs re-review.
+
+---
+
 ## Future Enhancements (Consolidated)
 
 | Area | Current (prototype) | Production direction |

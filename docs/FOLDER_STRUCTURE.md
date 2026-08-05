@@ -126,12 +126,16 @@ vigilAI/
 
 ## Frontend — Folder by Folder
 
+### `frontend/src/pages/`
+**Owns**: route-level composition (added M14, `docs/UI_UX_DESIGN.md` §12/TD-31) — one file per routed screen (`DashboardPage`, `CameraListPage`, `CameraDetailPage`, `LiveViewPage`, `RecordingsPage`, `EventsPage`), wired up in `App.tsx`'s `react-router-dom` route tree. This is the layer allowed to import from more than one `features/` folder in the same file (e.g. `CameraDetailPage`'s Zones tab renders `analytics-console/ZoneEditor` while its Configuration tab renders `camera-onboarding/ConfigPanel`) — the same role `core/` plays on the backend as the one place allowed to see across layers. A page should stay a thin composition: real UI/logic lives in `features/`, `pages/` just decides what's on screen for a given route and passes data between features that can't import each other directly.
+**Dependencies**: `features/`, `components/`, `hooks/`, `store/`, `services/`, `types/`, `lib/`.
+
 ### `frontend/src/features/`
-**Owns**: feature-scoped UI + logic, one subfolder per feature area (`camera-onboarding/`, `live-view/`, `recordings/`, `analytics-console/`). Each feature folder may contain its own components, hooks, and API-call wrappers.
-**Dependencies**: `services/`, `components/`, `hooks/`, `store/`, `types/`. Features do not import from each other — shared logic moves to `components/`/`hooks`/`services` instead.
+**Owns**: feature-scoped UI + logic, one subfolder per feature area (`camera-onboarding/`, `live-view/`, `recordings/`, `analytics-console/`, `dashboard/`, `event-center/` — the latter two added M14). Each feature folder may contain its own components, hooks, and API-call wrappers.
+**Dependencies**: `services/`, `components/`, `hooks/`, `store/`, `types/`, `lib/`. Features do not import from each other — shared logic moves to `components/`/`hooks/`/`services/`/`lib/` instead, or composition moves up to `pages/`.
 
 ### `frontend/src/components/`
-**Owns**: shared, feature-agnostic UI primitives (buttons, modals, layout shell, video player wrapper).
+**Owns**: shared, feature-agnostic UI primitives (buttons, modals, layout shell, video player wrapper) — e.g. `AppShell` (nav + routed `<Outlet/>`), `Panel`, `Dialog`, `CameraPicker`.
 **Dependencies**: none within `src/` besides `types/`.
 
 ### `frontend/src/services/`
@@ -142,7 +146,11 @@ vigilAI/
 **Owns**: React Query hooks built on top of `services/` (`useCameras`, `useLiveStream`, `useRecordings`, `useAnalyticsEvents`).
 
 ### `frontend/src/store/`
-**Owns**: Zustand stores for local UI state (selected camera, layout preferences, active analytics filters).
+**Owns**: Zustand stores for local UI state (selected camera, layout preferences, active analytics filters) — `uiStore` (added M14): last-viewed camera, the Event Center nav badge's unread count.
+
+### `frontend/src/lib/`
+**Owns**: small, pure, feature-agnostic helper functions that are neither a component, a hook, nor an API client — e.g. `eventCategory.ts` (added M14: derives an analytics event's category/human-readable detail from its `event_type`/`metadata`, shared by the Dashboard and Event Center, both of which need it but may not import each other).
+**Dependencies**: `types/`.
 
 ### `frontend/src/types/`
 **Owns**: TypeScript types mirroring backend Pydantic schemas (kept in sync manually initially; candidate for OpenAPI-generated types later — see backlog).
