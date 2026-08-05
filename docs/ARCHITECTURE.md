@@ -262,6 +262,8 @@ flowchart LR
 
 Every plugin implements `IDetectorPlugin.process(frame, context) -> list[DetectionEvent]`. The orchestrator is a plain iterator over enabled plugins per frame — there is no plugin-to-plugin coupling. `context` carries cross-frame state (track history for loitering, the baseline reference for missing-object detection) so plugins stay stateless with respect to each other while individually being allowed internal state.
 
+**One narrow, documented exception** (M10/T-100, `docs/TECHNICAL_DECISIONS.md` TD-27): Color Detection (P3 above) consumes Object Detection's (P1/P2) bounding boxes for the *same* frame rather than re-running detection — a same-frame, cross-plugin need `context`'s original per-plugin-cross-frame design didn't cover. `YoloObjectDetector` publishes the current frame's own `DetectionEvent`s into `context` under one reserved, exported key (`yolo_object_detector.EVENTS_BY_SOURCE_CONTEXT_KEY`), keyed by `frame.source_id` (the single shared `AnalyticsOrchestrator` instance serves multiple concurrent sources, so a global key would let one source's boxes bleed into another's color detection — the same risk TD-26 already resolved for tracker state, resolved here the same way). `ColorDetector` reads that one key for its own `frame.source_id` and nothing else. This is a specific, named producer/consumer handoff between two specific plugins, not a general license for a plugin to read another's private state — `IDetectorPlugin`'s docstring states the exception exactly this narrowly.
+
 ---
 
 ## 7. Cross-Cutting Concerns

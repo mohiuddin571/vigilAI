@@ -50,6 +50,7 @@ from app.core.config import Settings
 from app.domain.entities.camera import Camera
 from app.domain.entities.stream_profile import StreamProfile
 from app.domain.exceptions import CameraNotFoundError, UnsupportedConfigurationError
+from app.infrastructure.analytics.color_detector import ColorDetector
 from app.infrastructure.analytics.orchestrator import AnalyticsOrchestrator
 from app.infrastructure.analytics.yolo_detector import YoloObjectDetector
 from app.infrastructure.messaging.event_bus import EventBus
@@ -113,12 +114,17 @@ class Container:
         self._event_bus.subscribe(self._analytics_events_hub.broadcast)
         self._analytics_orchestrator = AnalyticsOrchestrator(
             [
+                # Order matters: ColorDetector reads the bounding boxes
+                # YoloObjectDetector writes into `context` for this same
+                # frame (T-100, docs/TECHNICAL_DECISIONS.md TD-27) — it must
+                # run after YoloObjectDetector in this list.
                 YoloObjectDetector(
                     model_path=str(settings.yolo_model_path),
                     confidence_threshold=settings.yolo_confidence_threshold,
                     iou_threshold=settings.yolo_iou_threshold,
                     device=settings.yolo_device,
-                )
+                ),
+                ColorDetector(),
             ]
         )
         self._analytics_session_registry = AnalyticsSessionRegistry(

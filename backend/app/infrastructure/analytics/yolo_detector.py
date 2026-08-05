@@ -14,6 +14,15 @@ from app.domain.value_objects.bounding_box import BoundingBox
 
 logger = structlog.get_logger(__name__)
 
+# Reserved `context` key (docs/ARCHITECTURE.md §6.4, TD-27): the one narrow,
+# documented exception to "plugins must never read another plugin's private
+# key out of context" (IDetectorPlugin's docstring). Written here, per
+# `frame.source_id` (not overwritten globally — the single shared
+# `AnalyticsOrchestrator` serves multiple concurrent sources, TD-24/TD-26),
+# so `ColorDetector` can read this frame's bounding boxes without re-running
+# detection.
+EVENTS_BY_SOURCE_CONTEXT_KEY = "yolo_object_detector.events_by_source"
+
 
 class _YoloBoxes(Protocol):
     """The subset of `ultralytics.engine.results.Boxes` this plugin reads."""
@@ -134,6 +143,12 @@ class YoloObjectDetector(IDetectorPlugin):
     "cold start downloads once, cached thereafter" (Ultralytics' own loader
     downloads-if-missing to exactly the path given).
 
+    Also writes this frame's `DetectionEvent`s into `context` under
+    `EVENTS_BY_SOURCE_CONTEXT_KEY`, keyed by `frame.source_id`, so
+    `ColorDetector` (T-100) can read this frame's bounding boxes for the
+    same source without re-running detection — see this module's constant
+    docstring and docs/TECHNICAL_DECISIONS.md TD-27.
+
     Inference runs via `asyncio.to_thread` — a plain thread, not a separate
     `multiprocessing` process — so the blocking, CPU-bound `model.track()`
     call never stalls the asyncio event loop
@@ -228,4 +243,5 @@ class YoloObjectDetector(IDetectorPlugin):
                         },
                     )
                 )
+        context.setdefault(EVENTS_BY_SOURCE_CONTEXT_KEY, {})[frame.source_id] = events
         return events
