@@ -6,11 +6,19 @@ from app.domain.exceptions import InvalidDomainStateError
 
 @dataclass
 class AnalyticsZone:
-    """A named polygon region on a camera's frame, used by zone-aware detectors."""
+    """A named polygon region on a camera's frame, used by zone-aware detectors.
+
+    `polygon` points and `LoiteringDetector`'s bounding-box containment checks
+    both live in the same normalized `[0, 1]` space `BoundingBox` already uses
+    (M11/T-111) — the frontend zone editor normalizes drawn pixel points on
+    save, so no coordinate conversion is needed at containment-check time
+    (docs/TECHNICAL_DECISIONS.md TD-28).
+    """
 
     camera_id: UUID
     name: str
     polygon: list[tuple[float, float]]
+    dwell_threshold_seconds: float
     id: UUID = field(default_factory=uuid4)
 
     def __post_init__(self) -> None:
@@ -19,4 +27,9 @@ class AnalyticsZone:
         if len(self.polygon) < 3:
             raise InvalidDomainStateError(
                 f"AnalyticsZone polygon needs at least 3 points, got {len(self.polygon)}"
+            )
+        if self.dwell_threshold_seconds <= 0:
+            raise InvalidDomainStateError(
+                "AnalyticsZone dwell_threshold_seconds must be > 0, got "
+                f"{self.dwell_threshold_seconds}"
             )

@@ -13,6 +13,7 @@ from app.interfaces.api.cameras import create_cameras_router
 from app.interfaces.api.recordings import create_recordings_router
 from app.interfaces.api.stream_debug import create_stream_debug_router
 from app.interfaces.api.streams import create_streams_router
+from app.interfaces.api.zones import create_zones_router
 from app.interfaces.websocket.analytics_events import create_analytics_events_router
 from app.interfaces.websocket.stream_status import create_stream_status_router
 
@@ -77,6 +78,15 @@ app.include_router(
     )
 )
 app.include_router(create_analytics_events_router(container.build_analytics_events_hub()))
+app.include_router(
+    create_zones_router(
+        container.build_create_zone_use_case,
+        container.build_list_zones_by_camera_use_case,
+        container.build_get_zone_use_case,
+        container.build_update_zone_use_case,
+        container.build_delete_zone_use_case,
+    )
+)
 
 
 @app.get("/health")

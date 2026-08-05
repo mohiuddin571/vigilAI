@@ -8,16 +8,40 @@ from app.domain.exceptions import InvalidDomainStateError
 
 def test_valid_zone() -> None:
     zone = AnalyticsZone(
-        camera_id=uuid4(), name="Entrance", polygon=[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)]
+        camera_id=uuid4(),
+        name="Entrance",
+        polygon=[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)],
+        dwell_threshold_seconds=5.0,
     )
     assert len(zone.polygon) == 3
+    assert zone.dwell_threshold_seconds == 5.0
 
 
 def test_rejects_empty_name() -> None:
     with pytest.raises(InvalidDomainStateError):
-        AnalyticsZone(camera_id=uuid4(), name=" ", polygon=[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)])
+        AnalyticsZone(
+            camera_id=uuid4(),
+            name=" ",
+            polygon=[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)],
+            dwell_threshold_seconds=5.0,
+        )
 
 
 def test_rejects_polygon_with_fewer_than_three_points() -> None:
     with pytest.raises(InvalidDomainStateError):
-        AnalyticsZone(camera_id=uuid4(), name="Entrance", polygon=[(0.0, 0.0), (1.0, 0.0)])
+        AnalyticsZone(
+            camera_id=uuid4(),
+            name="Entrance",
+            polygon=[(0.0, 0.0), (1.0, 0.0)],
+            dwell_threshold_seconds=5.0,
+        )
+
+
+def test_rejects_non_positive_dwell_threshold() -> None:
+    with pytest.raises(InvalidDomainStateError):
+        AnalyticsZone(
+            camera_id=uuid4(),
+            name="Entrance",
+            polygon=[(0.0, 0.0), (1.0, 0.0), (1.0, 1.0)],
+            dwell_threshold_seconds=0.0,
+        )

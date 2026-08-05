@@ -16,6 +16,7 @@ dependencies = [
     "greenlet>=3.5.4",
     "opencv-python-headless>=4.10",
     "ultralytics>=8.4.115",
+    "lap>=0.5.12",
 ]
 
 [dependency-groups]

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import DetectionOverlay from "./features/analytics-console/DetectionOverlay";
+import ZoneEditor from "./features/analytics-console/ZoneEditor";
 import CameraOnboardingPage from "./features/camera-onboarding/CameraOnboardingPage";
 import LiveView from "./features/live-view/LiveView";
 import RecordingControl from "./features/recordings/RecordingControl";
@@ -52,6 +53,18 @@ function App() {
           )}
         </div>
       </div>
+      {selected && (
+        <div className="w-full max-w-xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-semibold text-slate-900">Loitering Zones</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Draw a zone on the camera view; a loitering event fires once an object dwells
+            inside it past the configured threshold.
+          </p>
+          <div className="mt-4">
+            <ZoneEditor cameraId={selected.id} />
+          </div>
+        </div>
+      )}
       <div className="w-full max-w-xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">Recordings</h2>
         <p className="mt-1 text-sm text-slate-500">

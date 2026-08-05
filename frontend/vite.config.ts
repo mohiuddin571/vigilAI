@@ -11,6 +11,7 @@ export default defineConfig({
       '/streams': 'http://localhost:8000',
       '/recordings': 'http://localhost:8000',
       '/analytics': 'http://localhost:8000',
+      '/zones': 'http://localhost:8000',
       '/ws': { target: 'ws://localhost:8000', ws: true },
     },
   },

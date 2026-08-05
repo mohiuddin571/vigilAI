@@ -26,14 +26,14 @@ Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./
 - [x] YOLO Integration — Object Detection & Classification (M9)
 - [x] Object Tracking (ByteTrack, used by M9/M11)
 - [x] Color Detection (M10)
+- [x] Loitering Detection (M11)
 
 # In Progress
 
-- [ ] _Nothing yet. Next up: Loitering Detection._
+- [ ] _Nothing yet. Next up: Missing Object Detection (M12)._
 
 # Remaining
 
-- [ ] Loitering Detection (M11)
 - [ ] Missing Object Detection (M12)
 - [ ] License Plate Recognition / OCR (M13)
 - [ ] Frontend Integration — unified dashboard (M14)

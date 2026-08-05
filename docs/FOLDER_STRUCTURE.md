@@ -77,7 +77,7 @@ vigilAI/
 **Contains**:
 - `entities/` — `Camera`, `StreamProfile`, `Recording`, `DetectionEvent`, `AnalyticsZone`, `TrackedObject`, `Frame` (M2 — the `IFrameSource`/`IStreamWorker` payload type).
 - `value_objects/` — `Resolution`, `Codec`, `BitrateKbps`, `PlateNumber`, `ColorLabel`, `BoundingBox`, `StreamHealth`/`StreamState` (M2 — a Stream Worker's point-in-time health snapshot).
-- `events/` — domain events (`CameraWentOffline`, `LoiteringDetected`, `RecordingCompleted`).
+- No dedicated `events/` submodule: TD-24 (M8) settled the actual convention as a single `DetectionEvent` entity with a namespaced `event_type` string (e.g. `object_detection.person`, `color_detection.red`, `loitering_detection.dwell_exceeded`) rather than one class per finding — confirmed again at M11/TD-28 rather than introducing the `LoiteringDetected` class this line originally (pre-M8) anticipated. `CameraWentOffline`/`RecordingCompleted` were likewise never built as separate classes for the same reason.
 - `exceptions.py` — domain-level exception types (`CameraUnreachableError`, `UnsupportedConfigurationError`).
 **Dependencies**: none within the project. May use Python stdlib and `pydantic` (for validation-rich value objects) but never `fastapi`, `cv2`, `onvif_zeep_async`, `sqlalchemy`.
 **Who touches this**: anyone adding a new business concept. Changes here should be rare and deliberate — this is the layer everything else is built to protect.
