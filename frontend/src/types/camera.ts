@@ -72,3 +72,15 @@ export interface CameraConfigUpdateRequest {
   bitrate_kbps?: number;
   fps?: number;
 }
+
+/** GET/PUT /cameras/{id}/analytics-settings response shape. `enabled_types: null`
+ * means every type in `available_types` is enabled (the default, unconfigured state). */
+export interface AnalyticsSettingsResponse {
+  available_types: string[];
+  enabled_types: string[] | null;
+}
+
+/** PUT body — a full replace: `enabled_types: null` explicitly means "enable everything". */
+export interface AnalyticsSettingsUpdateRequest {
+  enabled_types: string[] | null;
+}

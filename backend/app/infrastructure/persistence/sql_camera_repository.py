@@ -101,6 +101,11 @@ class SqlCameraRepository(ICameraRepository):
             firmware_version=camera.firmware_version,
             is_online=camera.is_online,
             stream_profiles_json=json.dumps([_profile_to_dict(p) for p in camera.stream_profiles]),
+            enabled_detector_types_json=(
+                json.dumps(sorted(camera.enabled_detector_types))
+                if camera.enabled_detector_types is not None
+                else None
+            ),
         )
 
     def _to_entity(self, row: CameraRow) -> Camera:
@@ -117,4 +122,9 @@ class SqlCameraRepository(ICameraRepository):
             firmware_version=row.firmware_version,
             is_online=row.is_online,
             stream_profiles=[_profile_from_dict(d) for d in json.loads(row.stream_profiles_json)],
+            enabled_detector_types=(
+                frozenset(json.loads(row.enabled_detector_types_json))
+                if row.enabled_detector_types_json is not None
+                else None
+            ),
         )

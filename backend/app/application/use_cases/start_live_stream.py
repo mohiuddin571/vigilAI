@@ -190,6 +190,14 @@ class StartLiveStreamUseCase:
                 return
             await handle.stop()
 
+    async def stop_all(self) -> None:
+        """Stop every currently running Stream Worker — the composition root's
+        graceful-shutdown path calls this so a server restart never orphans a
+        `multiprocessing.Process` child (only automatic on a *clean* process
+        exit via its `daemon=True` flag, not e.g. `SIGKILL`)."""
+        for camera_id in list(self._streams):
+            await self.stop(camera_id)
+
     def frames(self, camera_id: UUID) -> AsyncIterator[Frame]:
         handle = self._streams.get(camera_id)
         if handle is None:

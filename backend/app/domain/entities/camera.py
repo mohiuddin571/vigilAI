@@ -22,6 +22,11 @@ class Camera:
     firmware_version: str | None = None
     stream_profiles: list[StreamProfile] = field(default_factory=list)
     is_online: bool = False
+    # `None` means every known detector plugin is enabled — the default for
+    # every camera until its analytics settings are explicitly changed
+    # (`UpdateCameraAnalyticsSettingsUseCase`). An empty frozenset means all
+    # types are explicitly disabled, distinct from `None`.
+    enabled_detector_types: frozenset[str] | None = None
 
     def __post_init__(self) -> None:
         if not self.name.strip():

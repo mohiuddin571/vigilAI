@@ -131,11 +131,11 @@ vigilAI/
 **Dependencies**: `features/`, `components/`, `hooks/`, `store/`, `services/`, `types/`, `lib/`.
 
 ### `frontend/src/features/`
-**Owns**: feature-scoped UI + logic, one subfolder per feature area (`camera-onboarding/`, `live-view/`, `recordings/`, `analytics-console/`, `dashboard/`, `event-center/` — the latter two added M14). Each feature folder may contain its own components, hooks, and API-call wrappers.
+**Owns**: feature-scoped UI + logic, one subfolder per feature area (`camera-onboarding/`, `recordings/`, `analytics-console/`, `dashboard/`, `event-center/` — the latter two added M14). Each feature folder may contain its own components, hooks, and API-call wrappers. (`live-view/` existed through M5–M14 but held only `LiveView.tsx`; once the Dashboard needed the same component, it moved to `components/` — see below — leaving no feature-specific content behind, so the folder was removed rather than left empty.)
 **Dependencies**: `services/`, `components/`, `hooks/`, `store/`, `types/`, `lib/`. Features do not import from each other — shared logic moves to `components/`/`hooks/`/`services/`/`lib/` instead, or composition moves up to `pages/`.
 
 ### `frontend/src/components/`
-**Owns**: shared, feature-agnostic UI primitives (buttons, modals, layout shell, video player wrapper) — e.g. `AppShell` (nav + routed `<Outlet/>`), `Panel`, `Dialog`, `CameraPicker`.
+**Owns**: shared, feature-agnostic UI primitives (buttons, modals, layout shell, video player wrapper) — e.g. `AppShell` (nav + routed `<Outlet/>`), `Panel`, `Dialog`, `CameraPicker`, `AnalyticsToggle`, `LiveView` (the latter two started in `features/`, moved here once a second caller needed them — `features/` may not import each other).
 **Dependencies**: none within `src/` besides `types/`.
 
 ### `frontend/src/services/`

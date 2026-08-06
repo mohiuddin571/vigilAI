@@ -6,7 +6,12 @@ from onvif import ONVIFCamera
 from app.application.ports.camera_gateway import ICameraGateway
 from app.domain.entities.camera import Camera
 from app.domain.entities.stream_profile import StreamProfile
-from app.domain.exceptions import CameraUnreachableError, DomainError, UnsupportedConfigurationError
+from app.domain.exceptions import (
+    CameraAuthenticationError,
+    CameraUnreachableError,
+    DomainError,
+    UnsupportedConfigurationError,
+)
 from app.domain.value_objects.video_encoder_capabilities import VideoEncoderCapabilities
 from app.infrastructure.onvif import encoder_config
 from app.infrastructure.onvif.mappers import (
@@ -160,6 +165,12 @@ class OnvifCameraGateway(ICameraGateway):
         except Exception as exc:
             # Our own pre-validation above should catch most rejections, but the
             # camera is the final authority — never let a raw SOAP fault escape.
+            # A fault classified as an auth/permission failure (e.g. the ONVIF
+            # account lacks privilege to change encoder settings) is reported
+            # as such rather than folded into a generic 422.
+            classified = classify_onvif_error(exc)
+            if isinstance(classified, CameraAuthenticationError):
+                raise classified from exc
             raise UnsupportedConfigurationError(
                 str(exc) or "Camera rejected the requested configuration"
             ) from exc

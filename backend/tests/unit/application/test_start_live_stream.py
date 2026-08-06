@@ -244,3 +244,25 @@ async def test_frames_raises_when_no_stream_is_running() -> None:
 async def test_stop_is_a_no_op_for_a_stream_that_was_never_started() -> None:
     use_case = _build_use_case(FakeCameraRepository(), FakeCameraGateway())
     await use_case.stop(UUID(int=1))  # must not raise
+
+
+async def test_stop_all_stops_every_running_worker() -> None:
+    camera_a = _make_camera()
+    camera_b = _make_camera()
+    repository = FakeCameraRepository({camera_a.id: camera_a, camera_b.id: camera_b})
+    built: list[FakeStreamWorker] = []
+    use_case = _build_use_case(repository, FakeCameraGateway(), built)
+
+    await use_case.execute(camera_a.id)
+    await use_case.execute(camera_b.id)
+
+    await use_case.stop_all()
+
+    assert all(worker.stopped for worker in built)
+    assert use_case.health(camera_a.id).state == StreamState.STOPPED
+    assert use_case.health(camera_b.id).state == StreamState.STOPPED
+
+
+async def test_stop_all_is_a_no_op_with_nothing_running() -> None:
+    use_case = _build_use_case(FakeCameraRepository(), FakeCameraGateway())
+    await use_case.stop_all()  # must not raise

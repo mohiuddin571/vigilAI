@@ -124,6 +124,12 @@ curl http://localhost:8000/health
 # {"status":"ok"}
 ```
 
+**Stopping the backend**: use Ctrl+C in that terminal (or `kill <pid>`, a plain `SIGTERM`) — never `kill -9`/`SIGKILL`. Live view and the debug MP4 stream each run their own Stream Worker as a separate OS process (TD-05); recording runs `ffmpeg` as a subprocess. `Container.shutdown` (wired into `main.py`'s lifespan) stops all of them cleanly on exit, but that code can only run during a *graceful* shutdown — `SIGKILL` skips it entirely and orphans those processes, silently piling up and competing with real streams for CPU/memory the longer a dev session runs. If you ever suspect a leak, check with:
+
+```bash
+ps aux | grep "multiprocessing.spawn" | grep -v grep
+```
+
 ### Step 5 — Run the frontend
 
 Open a **new, separate terminal** at the repo root (keep the backend terminal running):

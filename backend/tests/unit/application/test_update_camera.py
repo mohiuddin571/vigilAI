@@ -79,6 +79,16 @@ async def test_update_camera_preserves_id_and_untouched_fields() -> None:
     assert updated.is_online is True
 
 
+async def test_update_camera_preserves_enabled_detector_types() -> None:
+    camera = _make_camera(enabled_detector_types=frozenset({"color_detector"}))
+    repository = FakeCameraRepository([camera])
+    use_case = UpdateCameraUseCase(repository)
+
+    updated = await use_case.execute(camera.id, name="Renamed")
+
+    assert updated.enabled_detector_types == frozenset({"color_detector"})
+
+
 async def test_update_camera_raises_not_found_for_unknown_id() -> None:
     use_case = UpdateCameraUseCase(FakeCameraRepository())
 

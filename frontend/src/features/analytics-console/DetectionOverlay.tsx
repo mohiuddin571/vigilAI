@@ -9,9 +9,10 @@ interface DetectionOverlayProps {
 /**
  * Renders YOLO detection boxes/labels over a live view (T-093).
  *
- * Rendered as a slot passed into `live-view/LiveView.tsx` from `App.tsx`
- * rather than imported by LiveView directly — `features/` never import each
- * other (docs/FOLDER_STRUCTURE.md). `BoundingBox` is already normalized to
+ * Rendered as a slot passed into `components/LiveView.tsx` from the
+ * page/feature composing both, rather than imported by LiveView directly —
+ * `features/` never import each other (docs/FOLDER_STRUCTURE.md).
+ * `BoundingBox` is already normalized to
  * `[0, 1]`, so boxes are positioned with plain percentages against this
  * component's `inset-0` parent (the same relative wrapper LiveView renders
  * its `<img>` in) — no pixel/DOM-measurement math needed.

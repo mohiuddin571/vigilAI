@@ -9,9 +9,7 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { to: '/', label: 'Dashboard' },
-  { to: '/cameras', label: 'Cameras' },
-  { to: '/live', label: 'Live View' },
+  { to: '/', label: 'Cameras' },
   { to: '/recordings', label: 'Recordings' },
   { to: '/events', label: 'Event Center' },
 ];

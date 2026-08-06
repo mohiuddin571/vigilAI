@@ -172,6 +172,40 @@ class CameraConfigResponse(BaseModel):
         )
 
 
+class AnalyticsSettingsResponse(BaseModel):
+    """GET/PUT /cameras/{id}/analytics-settings response shape.
+
+    `enabled_types: None` means every known detector type is enabled — the
+    default for a camera whose settings were never explicitly changed,
+    mirroring `Camera.enabled_detector_types`'s `None`-means-all semantics.
+    """
+
+    available_types: list[str]
+    enabled_types: list[str] | None
+
+    @classmethod
+    def from_camera(
+        cls, camera: Camera, known_detector_types: frozenset[str]
+    ) -> "AnalyticsSettingsResponse":
+        return cls(
+            available_types=sorted(known_detector_types),
+            enabled_types=(
+                sorted(camera.enabled_detector_types)
+                if camera.enabled_detector_types is not None
+                else None
+            ),
+        )
+
+
+class AnalyticsSettingsUpdateRequest(BaseModel):
+    """PUT /cameras/{id}/analytics-settings body — a full replace, not a
+    partial patch: `enabled_types: null` explicitly means "enable every known
+    type" (matches `Camera.enabled_detector_types`'s domain semantics) rather
+    than "leave unchanged"."""
+
+    enabled_types: list[str] | None
+
+
 class ResolutionUpdate(BaseModel):
     width: int = Field(gt=0)
     height: int = Field(gt=0)

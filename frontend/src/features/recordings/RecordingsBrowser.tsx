@@ -12,6 +12,11 @@ interface RecordingsBrowserProps {
   initialCameraId?: string;
   initialStartIso?: string;
   initialEndIso?: string;
+  /** Pins the list to one camera and hides the Camera selector entirely
+   * (Camera Detail's Recordings tab, docs/UI_UX_DESIGN.md §6.5a) — unlike
+   * `initialCameraId`, which only pre-selects the dropdown, this camera can't
+   * be switched away from. */
+  lockedCameraId?: string;
 }
 
 /** ISO 8601 -> `datetime-local` input value (local time, no timezone), the inverse of `toIsoOrUndefined`. */
@@ -48,8 +53,9 @@ function RecordingsBrowser({
   initialCameraId = '',
   initialStartIso,
   initialEndIso,
+  lockedCameraId,
 }: RecordingsBrowserProps) {
-  const [cameraId, setCameraId] = useState<string>(initialCameraId);
+  const [cameraId, setCameraId] = useState<string>(lockedCameraId ?? initialCameraId);
   const [start, setStart] = useState(isoToLocalDateTimeInput(initialStartIso));
   const [end, setEnd] = useState(isoToLocalDateTimeInput(initialEndIso));
   const [selectedRecording, setSelectedRecording] = useState<RecordingResponse | null>(null);
@@ -67,21 +73,23 @@ function RecordingsBrowser({
   return (
     <div className="space-y-3 rounded border border-slate-200 bg-slate-50 p-3">
       <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-sm text-slate-600">
-          Camera
-          <select
-            className="rounded border border-slate-300 px-2 py-1"
-            value={cameraId}
-            onChange={(event) => setCameraId(event.target.value)}
-          >
-            <option value="">All cameras</option>
-            {cameras.map((camera) => (
-              <option key={camera.id} value={camera.id}>
-                {camera.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {!lockedCameraId && (
+          <label className="flex flex-col gap-1 text-sm text-slate-600">
+            Camera
+            <select
+              className="rounded border border-slate-300 px-2 py-1"
+              value={cameraId}
+              onChange={(event) => setCameraId(event.target.value)}
+            >
+              <option value="">All cameras</option>
+              {cameras.map((camera) => (
+                <option key={camera.id} value={camera.id}>
+                  {camera.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="flex flex-col gap-1 text-sm text-slate-600">
           From
           <input

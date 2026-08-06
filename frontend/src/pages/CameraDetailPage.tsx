@@ -1,15 +1,33 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate, useOutletContext, useParams } from 'react-router-dom';
+import AnalyticsToggle from '../components/AnalyticsToggle';
 import ConfirmDialog from '../components/ConfirmDialog';
 import Dialog from '../components/Dialog';
+import LiveView from '../components/LiveView';
 import Panel from '../components/Panel';
+import DetectionOverlay from '../features/analytics-console/DetectionOverlay';
 import ZoneEditor from '../features/analytics-console/ZoneEditor';
 import ConfigPanel from '../features/camera-onboarding/ConfigPanel';
 import EditCameraForm from '../features/camera-onboarding/EditCameraForm';
+import RecordingControl from '../features/recordings/RecordingControl';
+import RecordingsBrowser from '../features/recordings/RecordingsBrowser';
+import useAnalyticsStatus from '../hooks/useAnalyticsStatus';
 import useCamera from '../hooks/useCamera';
+import useCameraAnalyticsSettings from '../hooks/useCameraAnalyticsSettings';
 import { ApiError, deleteCamera } from '../services/camerasApi';
 import type { CameraResponse } from '../types/camera';
+
+/** Human labels for backend `IDetectorPlugin.plugin_id`s (`container.py`'s
+ * `detector_plugins` list) — falls back to the raw id for a plugin added
+ * later without a matching label here, so the Settings tab never hides one. */
+const DETECTOR_TYPE_LABELS: Record<string, string> = {
+  yolo_object_detector: 'Object Detection',
+  color_detector: 'Color Detection',
+  loitering_detector: 'Loitering',
+  missing_object_detector: 'Missing Object',
+  license_plate_recognizer: 'License Plate Recognition',
+};
 
 const tabLinkClass = ({ isActive }: { isActive: boolean }) =>
   `rounded px-3 py-1.5 text-sm font-medium ${
@@ -18,12 +36,21 @@ const tabLinkClass = ({ isActive }: { isActive: boolean }) =>
 
 /**
  * `/cameras/:cameraId` layout route (docs/UI_UX_DESIGN.md §6.3–§6.5) — a
- * tabbed shell (Overview / Configuration / Zones) around the existing
- * per-feature components. Fetches the camera once here and hands it to the
- * active tab via `useOutletContext`, since `ConfigPanel`/`ZoneEditor` live in
- * different `features/` folders that must not import each other directly
+ * tabbed shell (Overview / Configuration / Zones / Live View / Recordings /
+ * Settings) around the existing per-feature components. Fetches the camera
+ * once here and hands it to the active tab via `useOutletContext`, since
+ * `ConfigPanel`/`ZoneEditor`/`RecordingsBrowser` live in different
+ * `features/` folders that must not import each other directly
  * (docs/FOLDER_STRUCTURE.md) — this page is the composition point, the same
- * role the pre-M14 `App.tsx` played for `LiveView`'s `overlay` slot.
+ * role the pre-M14 `App.tsx` played for `LiveView`'s `overlay` slot. The Live
+ * View tab reuses `components/LiveView.tsx` scoped to this one camera (unlike
+ * `/live/:id`, there's no camera picker — the tab itself is the scoping) plus
+ * `RecordingControl`, exactly like `/live/:id` composes them; the Recordings
+ * tab reuses `RecordingsBrowser` with `lockedCameraId` so it only ever loads
+ * this camera's recordings; the Settings tab is the sole remaining home for
+ * `AnalyticsToggle` (removed from the Dashboard tile and this page's Live
+ * View tab per explicit user direction) plus the new per-type event-capture
+ * checkboxes backed by `PUT /cameras/:id/analytics-settings`.
  */
 function CameraDetailPage() {
   const { cameraId } = useParams<{ cameraId: string }>();
@@ -52,6 +79,15 @@ function CameraDetailPage() {
         </NavLink>
         <NavLink to={`/cameras/${camera.id}/zones`} className={tabLinkClass}>
           Zones
+        </NavLink>
+        <NavLink to={`/cameras/${camera.id}/live`} className={tabLinkClass}>
+          Live View
+        </NavLink>
+        <NavLink to={`/cameras/${camera.id}/recordings`} className={tabLinkClass}>
+          Recordings
+        </NavLink>
+        <NavLink to={`/cameras/${camera.id}/settings`} className={tabLinkClass}>
+          Settings
         </NavLink>
       </nav>
 
@@ -219,6 +255,99 @@ export function CameraZonesTab() {
       description="Draw a zone on the camera view. A loitering event fires once an object dwells inside it past the configured threshold; an optional missing-object threshold flags a baseline-registered object's absence."
     >
       <ZoneEditor cameraId={camera.id} />
+    </Panel>
+  );
+}
+
+export function CameraLiveViewTab() {
+  const camera = useCameraContext();
+  const analytics = useAnalyticsStatus(camera.id);
+  return (
+    <Panel title="Live View">
+      <div className="space-y-3">
+        <LiveView
+          cameraId={camera.id}
+          cameraName={camera.name}
+          autoStart
+          overlay={analytics.enabled ? <DetectionOverlay cameraId={camera.id} /> : undefined}
+        />
+        <RecordingControl cameraId={camera.id} />
+      </div>
+    </Panel>
+  );
+}
+
+export function CameraRecordingsTab() {
+  const camera = useCameraContext();
+  return (
+    <Panel title="Recordings">
+      <RecordingsBrowser cameras={[camera]} lockedCameraId={camera.id} />
+    </Panel>
+  );
+}
+
+export function CameraSettingsTab() {
+  const camera = useCameraContext();
+  const settings = useCameraAnalyticsSettings(camera.id);
+
+  const isTypeEnabled = (type: string) =>
+    settings.enabledTypes === null || settings.enabledTypes.includes(type);
+
+  const toggleType = (type: string) => {
+    const currentlyEnabled = settings.availableTypes.filter(isTypeEnabled);
+    const next = isTypeEnabled(type)
+      ? currentlyEnabled.filter((enabledType) => enabledType !== type)
+      : [...currentlyEnabled, type];
+    settings.save(next.length === settings.availableTypes.length ? null : next);
+  };
+
+  return (
+    <Panel
+      title="Settings"
+      description="Control whether analytics runs for this camera, and which event types it captures."
+    >
+      <div className="space-y-4">
+        <div className="flex items-center justify-between rounded border border-slate-200 p-3">
+          <div>
+            <p className="text-sm font-medium text-slate-900">Analytics</p>
+            <p className="text-xs text-slate-500">
+              Turns the whole analytics pipeline on or off for this camera.
+            </p>
+          </div>
+          <AnalyticsToggle sourceId={camera.id} label="" />
+        </div>
+
+        <div className="rounded border border-slate-200 p-3">
+          <p className="text-sm font-medium text-slate-900">Event capture types</p>
+          <p className="mt-1 text-xs text-slate-500">
+            Takes effect immediately if analytics is currently running for this camera. Color
+            Detection, Loitering, and Missing Object all read Object Detection's output, so
+            disabling Object Detection silences those three too.
+          </p>
+          {settings.isLoading ? (
+            <p className="mt-2 text-sm text-slate-400">Loading…</p>
+          ) : (
+            <ul className="mt-2 space-y-2">
+              {settings.availableTypes.map((type) => (
+                <li key={type} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id={`detector-type-${type}`}
+                    checked={isTypeEnabled(type)}
+                    disabled={settings.isSaving}
+                    onChange={() => toggleType(type)}
+                    className="h-4 w-4 rounded border-slate-300"
+                  />
+                  <label htmlFor={`detector-type-${type}`} className="text-sm text-slate-700">
+                    {DETECTOR_TYPE_LABELS[type] ?? type}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+          {settings.error && <p className="mt-2 text-xs text-red-600">{settings.error}</p>}
+        </div>
+      </div>
     </Panel>
   );
 }

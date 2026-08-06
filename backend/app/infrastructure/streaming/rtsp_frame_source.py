@@ -1,6 +1,7 @@
 import asyncio
 import os
 from collections.abc import AsyncIterator, Callable
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from urllib.parse import quote, urlparse, urlunparse
 
@@ -10,6 +11,24 @@ from app.application.ports.camera_gateway import ICameraGateway
 from app.application.ports.frame_source import IFrameSource
 from app.domain.entities.frame import Frame
 from app.domain.exceptions import DomainError, FrameSourceUnavailableError
+
+# `cv2.VideoCapture` (OpenCV's bundled FFmpeg backend) is not safe for
+# concurrent `read()`/`release()` on the same object from different OS
+# threads — `release()` running while a `read()` is still mid-flight can
+# abort the whole process with `Assertion fctx->async_lock failed` in
+# libavcodec's threaded HEVC decoder. `asyncio.to_thread()` alone doesn't
+# prevent this: it dispatches onto the shared default thread pool, so a
+# `read()` and a later `release()` can land on *different* worker threads,
+# and cancelling the coroutine awaiting a `read()` (e.g. a caller's shutdown
+# cancelling the task consuming `frames()`) does not stop that read's
+# underlying OS thread — it keeps running in the background while `stop()`
+# proceeds to call `release()` concurrently. Every `cap` call for one
+# instance (open, read, set, release) below instead runs on that instance's
+# own dedicated single-worker executor: a `ThreadPoolExecutor(max_workers=1)`
+# processes submitted jobs strictly one at a time, so a `release()` submitted
+# while a `read()` is still running is guaranteed to wait for it — true
+# regardless of what asyncio-level cancellation does to the *coroutine*
+# awaiting that read, since the executor's own queue doesn't care.
 
 
 def _open_capture(
@@ -59,17 +78,24 @@ def _add_rtsp_credentials(url: str, username: str, password: str) -> str:
     return urlunparse(parsed._replace(netloc=f"{credentials}@{host}{port}"))
 
 
-async def _frames_from_capture(cap: cv2.VideoCapture, source_id: str) -> AsyncIterator[Frame]:
+async def _frames_from_capture(
+    cap: cv2.VideoCapture, source_id: str, executor: ThreadPoolExecutor
+) -> AsyncIterator[Frame]:
     """Read frames from an already-opened capture until the stream ends/drops.
 
     No looping and no FPS throttling, unlike `Mp4FileFrameSource`: RTSP is a
     live source already paced by the network, and a genuine end-of-stream
     here means disconnect, not "restart from the top" — `ReconnectSupervisor`
     (source-agnostic, unchanged) is what turns this into a reconnect attempt.
+
+    Every `cap.read()` runs on the owning source's dedicated single-worker
+    `executor` (see this module's top-of-file note) — never the shared
+    `asyncio.to_thread` pool, so `stop()`'s `cap.release()` can't race it.
     """
+    loop = asyncio.get_running_loop()
     sequence = 0
     while True:
-        ok, image = await asyncio.to_thread(cap.read)
+        ok, image = await loop.run_in_executor(executor, cap.read)
         if not ok:
             return
         yield Frame(
@@ -108,13 +134,17 @@ class RawRtspFrameSource(IFrameSource):
         self._read_timeout_ms = read_timeout_ms
         self._rtsp_transport = rtsp_transport
         self._cap: cv2.VideoCapture | None = None
+        self._executor: ThreadPoolExecutor | None = None
 
     @property
     def source_id(self) -> str:
         return self._source_id
 
     async def start(self) -> None:
-        cap = await asyncio.to_thread(
+        executor = ThreadPoolExecutor(max_workers=1)
+        loop = asyncio.get_running_loop()
+        cap = await loop.run_in_executor(
+            executor,
             _open_capture,
             self._rtsp_url,
             self._open_timeout_ms,
@@ -122,21 +152,28 @@ class RawRtspFrameSource(IFrameSource):
             self._rtsp_transport,
         )
         if not cap.isOpened():
-            cap.release()
+            await loop.run_in_executor(executor, cap.release)
+            await asyncio.to_thread(executor.shutdown)
             raise FrameSourceUnavailableError(
                 f"Could not open RTSP stream for source {self._source_id!r}"
             )
         self._cap = cap
+        self._executor = executor
 
     async def stop(self) -> None:
-        if self._cap is not None:
-            await asyncio.to_thread(self._cap.release)
+        if self._cap is not None and self._executor is not None:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(self._executor, self._cap.release)
             self._cap = None
+        if self._executor is not None:
+            executor = self._executor
+            self._executor = None
+            await asyncio.to_thread(executor.shutdown)
 
     async def frames(self) -> AsyncIterator[Frame]:
-        if self._cap is None:
+        if self._cap is None or self._executor is None:
             raise FrameSourceUnavailableError("start() must succeed before frames() is iterated")
-        async for frame in _frames_from_capture(self._cap, self._source_id):
+        async for frame in _frames_from_capture(self._cap, self._source_id, self._executor):
             yield frame
 
 
@@ -191,6 +228,7 @@ class OnvifRtspFrameSource(IFrameSource):
         self._rtsp_transport = rtsp_transport
         self._camera_gateway_factory = camera_gateway_factory
         self._cap: cv2.VideoCapture | None = None
+        self._executor: ThreadPoolExecutor | None = None
 
     @property
     def source_id(self) -> str:
@@ -198,7 +236,10 @@ class OnvifRtspFrameSource(IFrameSource):
 
     async def start(self) -> None:
         uri = await self._resolve_stream_uri()
-        cap = await asyncio.to_thread(
+        executor = ThreadPoolExecutor(max_workers=1)
+        loop = asyncio.get_running_loop()
+        cap = await loop.run_in_executor(
+            executor,
             _open_capture,
             uri,
             self._open_timeout_ms,
@@ -206,11 +247,13 @@ class OnvifRtspFrameSource(IFrameSource):
             self._rtsp_transport,
         )
         if not cap.isOpened():
-            cap.release()
+            await loop.run_in_executor(executor, cap.release)
+            await asyncio.to_thread(executor.shutdown)
             raise FrameSourceUnavailableError(
                 f"Could not open RTSP stream for source {self._source_id!r}"
             )
         self._cap = cap
+        self._executor = executor
 
     async def _resolve_stream_uri(self) -> str:
         if self._rtsp_url_override is not None:
@@ -229,12 +272,17 @@ class OnvifRtspFrameSource(IFrameSource):
             await gateway.disconnect()
 
     async def stop(self) -> None:
-        if self._cap is not None:
-            await asyncio.to_thread(self._cap.release)
+        if self._cap is not None and self._executor is not None:
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(self._executor, self._cap.release)
             self._cap = None
+        if self._executor is not None:
+            executor = self._executor
+            self._executor = None
+            await asyncio.to_thread(executor.shutdown)
 
     async def frames(self) -> AsyncIterator[Frame]:
-        if self._cap is None:
+        if self._cap is None or self._executor is None:
             raise FrameSourceUnavailableError("start() must succeed before frames() is iterated")
-        async for frame in _frames_from_capture(self._cap, self._source_id):
+        async for frame in _frames_from_capture(self._cap, self._source_id, self._executor):
             yield frame

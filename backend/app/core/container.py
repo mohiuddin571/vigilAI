@@ -24,9 +24,12 @@ import functools
 from pathlib import Path
 from uuid import UUID
 
+import structlog
+
 from app.application.ports.analytics_zone_repository import IAnalyticsZoneRepository
 from app.application.ports.camera_gateway import ICameraGateway
 from app.application.ports.camera_repository import ICameraRepository
+from app.application.ports.detector_plugin import IDetectorPlugin
 from app.application.ports.event_repository import IEventRepository
 from app.application.ports.frame_source import IFrameSource
 from app.application.ports.recording_file_store import IRecordingFileStore
@@ -54,6 +57,9 @@ from app.application.use_cases.start_live_stream import StartLiveStreamUseCase
 from app.application.use_cases.start_recording import StartRecordingUseCase
 from app.application.use_cases.stop_recording import StopRecordingUseCase
 from app.application.use_cases.update_camera import UpdateCameraUseCase
+from app.application.use_cases.update_camera_analytics_settings import (
+    UpdateCameraAnalyticsSettingsUseCase,
+)
 from app.application.use_cases.update_camera_config import UpdateCameraConfigUseCase
 from app.application.use_cases.update_camera_rtsp_override import UpdateCameraRtspOverrideUseCase
 from app.application.use_cases.update_zone import UpdateZoneUseCase
@@ -84,6 +90,8 @@ from app.infrastructure.streaming.rtsp_frame_source import OnvifRtspFrameSource
 from app.infrastructure.streaming.stream_worker import StreamWorker
 from app.infrastructure.streaming.supervised_frame_source import SupervisedFrameSource
 from app.interfaces.websocket.analytics_events import AnalyticsEventsHub
+
+logger = structlog.get_logger(__name__)
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _DEBUG_MP4_FIXTURE_PATH = _REPO_ROOT / "backend" / "tests" / "fixtures" / "sample.mp4"
@@ -134,39 +142,46 @@ class Container:
         self._analytics_events_hub = AnalyticsEventsHub()
         self._event_bus.subscribe(self._event_repository.add)
         self._event_bus.subscribe(self._analytics_events_hub.broadcast)
-        self._analytics_orchestrator = AnalyticsOrchestrator(
-            [
-                # Order matters: ColorDetector, LoiteringDetector, and
-                # MissingObjectDetector all read the bounding boxes/track ids
-                # YoloObjectDetector writes into `context` for this same frame
-                # (T-100/T-113/T-121, docs/TECHNICAL_DECISIONS.md
-                # TD-27/TD-28/TD-29) — all three must run after
-                # YoloObjectDetector in this list. LicensePlateRecognizer
-                # (T-132, TD-30) is the one exception: it localizes plate
-                # candidates over the full frame independently, reading
-                # nothing from `context` — its position in this list is
-                # therefore not order-dependent, kept last for readability.
-                YoloObjectDetector(
-                    model_path=str(settings.yolo_model_path),
-                    confidence_threshold=settings.yolo_confidence_threshold,
-                    iou_threshold=settings.yolo_iou_threshold,
-                    device=settings.yolo_device,
+        detector_plugins: list[IDetectorPlugin] = [
+            # Order matters: ColorDetector, LoiteringDetector, and
+            # MissingObjectDetector all read the bounding boxes/track ids
+            # YoloObjectDetector writes into `context` for this same frame
+            # (T-100/T-113/T-121, docs/TECHNICAL_DECISIONS.md
+            # TD-27/TD-28/TD-29) — all three must run after
+            # YoloObjectDetector in this list. LicensePlateRecognizer
+            # (T-132, TD-30) is the one exception: it localizes plate
+            # candidates over the full frame independently, reading
+            # nothing from `context` — its position in this list is
+            # therefore not order-dependent, kept last for readability.
+            YoloObjectDetector(
+                model_path=str(settings.yolo_model_path),
+                confidence_threshold=settings.yolo_confidence_threshold,
+                iou_threshold=settings.yolo_iou_threshold,
+                device=settings.yolo_device,
+            ),
+            ColorDetector(),
+            LoiteringDetector(zone_repository=self._zone_repository),
+            MissingObjectDetector(zone_repository=self._zone_repository),
+            LicensePlateRecognizer(
+                plate_localizer=PlateLocalizer(),
+                plate_reader=EasyOcrReader(
+                    languages=settings.easyocr_languages,
+                    model_storage_directory=str(settings.easyocr_model_storage_dir),
+                    gpu=settings.easyocr_gpu,
+                    min_confidence=settings.easyocr_min_confidence,
                 ),
-                ColorDetector(),
-                LoiteringDetector(zone_repository=self._zone_repository),
-                MissingObjectDetector(zone_repository=self._zone_repository),
-                LicensePlateRecognizer(
-                    plate_localizer=PlateLocalizer(),
-                    plate_reader=EasyOcrReader(
-                        languages=settings.easyocr_languages,
-                        model_storage_directory=str(settings.easyocr_model_storage_dir),
-                        gpu=settings.easyocr_gpu,
-                        min_confidence=settings.easyocr_min_confidence,
-                    ),
-                    queue_max_size=settings.lpr_ocr_queue_max_size,
-                ),
-            ]
+                queue_max_size=settings.lpr_ocr_queue_max_size,
+            ),
+        ]
+        # Kept alongside the orchestrator (not read back off it) so the
+        # per-camera Settings tab (`UpdateCameraAnalyticsSettingsUseCase`,
+        # `/cameras/{id}/analytics-settings`) has a single source of truth for
+        # which `plugin_id`s are valid to enable/disable, without reaching
+        # into `AnalyticsOrchestrator`'s private plugin list.
+        self._known_detector_types: frozenset[str] = frozenset(
+            plugin.plugin_id for plugin in detector_plugins
         )
+        self._analytics_orchestrator = AnalyticsOrchestrator(detector_plugins)
         self._analytics_session_registry = AnalyticsSessionRegistry(
             build_use_case=self._build_analytics_use_case
         )
@@ -193,6 +208,34 @@ class Container:
 
     async def init_db(self) -> None:
         await init_db(self._engine)
+
+    async def shutdown(self) -> None:
+        """Stop every subprocess-backed worker this process owns.
+
+        Called from `main.py`'s lifespan on a graceful shutdown (Ctrl+C /
+        `SIGTERM` / a plain `kill`) so restarting the dev server never
+        orphans a Stream Worker (`multiprocessing.Process`, live view + the
+        debug MP4 stream) or a Recording Worker (`ffmpeg` via
+        `asyncio.create_subprocess_exec`) — both leaked repeatedly during a
+        real debugging session where the server was instead `kill -9`'d,
+        which bypasses this path entirely (SIGKILL allows no Python code,
+        including this method, to run) and accumulated over a dozen orphaned
+        processes competing with real streams for CPU. `daemon=True` on
+        `StreamWorker`'s child process already gives *some* protection on a
+        clean exit via Python's own `atexit` handling, but that's implicit
+        and doesn't cover the `ffmpeg` subprocess case at all — this makes
+        cleanup explicit, logged, and complete for both.
+        """
+        logger.info("container.shutdown_started")
+        await self._debug_stream_use_case.stop()
+        await self._start_live_stream_use_case.stop_all()
+        stop_recording = self.build_stop_recording_use_case()
+        for camera_id in self._recording_session_registry.active_camera_ids():
+            try:
+                await stop_recording.execute(camera_id)
+            except Exception:
+                logger.exception("container.shutdown_recording_stop_failed", camera_id=camera_id)
+        logger.info("container.shutdown_complete")
 
     def build_camera_gateway(self) -> ICameraGateway:
         return OnvifCameraGateway()
@@ -399,10 +442,46 @@ class Container:
         )
 
     async def _build_analytics_use_case(self, source_id: str) -> RunAnalyticsPipelineUseCase:
+        enabled_plugin_ids = await self._resolve_enabled_detector_types(source_id)
         return RunAnalyticsPipelineUseCase(
             frame_source=await self._build_analytics_frame_source(source_id),
-            process_frame=self._analytics_orchestrator.process,
+            process_frame=functools.partial(
+                self._analytics_orchestrator.process, enabled_plugin_ids=enabled_plugin_ids
+            ),
             event_publisher=self._event_bus,
+        )
+
+    async def _resolve_enabled_detector_types(self, source_id: str) -> frozenset[str] | None:
+        """This source's `Camera.enabled_detector_types`, or `None` for the debug
+        MP4 stream/an id that doesn't resolve to an onboarded camera.
+
+        Deliberately best-effort, unlike `_build_camera_analytics_source`
+        (which raises `UnsupportedConfigurationError`/`CameraNotFoundError`
+        for the same bad-id cases): resolving settings is not the place that
+        should block analytics from starting for a source that's otherwise
+        fine — that method is still the one that raises for a genuinely
+        invalid `source_id`, so an unresolvable id here just falls back to
+        "no camera-specific settings" (all plugins enabled) rather than
+        duplicating that error handling.
+        """
+        try:
+            camera_id = UUID(source_id)
+        except ValueError:
+            return None
+        camera = await self._camera_repository.get(camera_id)
+        return camera.enabled_detector_types if camera is not None else None
+
+    @property
+    def known_detector_types(self) -> frozenset[str]:
+        return self._known_detector_types
+
+    def build_update_camera_analytics_settings_use_case(
+        self,
+    ) -> UpdateCameraAnalyticsSettingsUseCase:
+        return UpdateCameraAnalyticsSettingsUseCase(
+            self.build_camera_repository(),
+            known_detector_types=self._known_detector_types,
+            analytics_session_registry=self._analytics_session_registry,
         )
 
     def build_analytics_session_registry(self) -> AnalyticsSessionRegistry:

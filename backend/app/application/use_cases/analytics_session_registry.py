@@ -29,6 +29,17 @@ class AnalyticsSessionRegistry:
     — so "toggling off stops new events without restarting the stream"
     (T-085's Definition of Done) holds by construction.
 
+    `restart(source_id)` is the one operation that tears down and rebuilds a
+    session outright — for the one case `enable()`'s idempotent reuse can't
+    handle: picking up a `build_use_case` input that changed since the
+    session was first built (e.g. `Camera.enabled_detector_types`, resolved
+    once per build in `Container._build_analytics_use_case`). A plain
+    `disable()`-then-`enable()` cycle does *not* achieve this — `enable()`
+    reuses the existing session verbatim whenever one is present, regardless
+    of its enabled/disabled flag. `restart()` preserves that flag across the
+    rebuild (a disabled session stays disabled, just running the freshly
+    resolved plugin set once re-enabled).
+
     `build_use_case` is `async` (M9, docs/TECHNICAL_DECISIONS.md TD-25) —
     widened from a plain sync callable because resolving a real onboarded
     camera's `source_id` into a frame source requires an `await`ed
@@ -62,3 +73,28 @@ class AnalyticsSessionRegistry:
     def is_enabled(self, source_id: str) -> bool:
         session = self._sessions.get(source_id)
         return session is not None and session.use_case.enabled
+
+    async def restart(self, source_id: str) -> None:
+        """Tear down and rebuild `source_id`'s session so it picks up a
+        `build_use_case` input that changed since it was last built —
+        a no-op if no session is currently running for this source.
+
+        Stops the old session cooperatively via `request_stop()` (not
+        `task.cancel()`): `RunAnalyticsPipelineUseCase.execute()`'s `finally`
+        already stops the old frame source once that completes, so the new
+        session's `build_use_case` call is guaranteed to run against a
+        source that's fully released. Preserves the session's
+        enabled/disabled flag across the rebuild.
+        """
+        async with self._locks[source_id]:
+            session = self._sessions.pop(source_id, None)
+            if session is None:
+                return
+            was_enabled = session.use_case.enabled
+            session.use_case.request_stop()
+            await session.task
+            use_case = await self._build_use_case(source_id)
+            if not was_enabled:
+                use_case.disable()
+            task = asyncio.create_task(use_case.execute())
+            self._sessions[source_id] = _AnalyticsSession(use_case, task)

@@ -74,6 +74,7 @@ class ReconnectSupervisor:
 
             self._ever_connected = True
             self._consecutive_failures = 0
+            self._last_error = None
             self._state = StreamState.CONNECTED
             try:
                 async for frame in self._source.frames():

@@ -63,6 +63,18 @@ async def test_mid_stream_disconnect_triggers_reconnect_and_resumes() -> None:
     supervisor.stop()
 
 
+async def test_last_error_clears_after_a_successful_reconnect() -> None:
+    source = FlakyFrameSource(fail_start_times=2)
+    sleeper = _RecordingSleeper()
+    supervisor = ReconnectSupervisor(source, backoff_schedule=[1, 2, 4], sleep=sleeper)
+
+    frames = supervisor.run()
+    await anext(frames)
+
+    assert supervisor.health().last_error is None
+    supervisor.stop()
+
+
 async def test_stop_ends_the_run_loop() -> None:
     source = FlakyFrameSource()
     supervisor = ReconnectSupervisor(source, backoff_schedule=[1])

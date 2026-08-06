@@ -57,6 +57,7 @@ class UpdateCameraUseCase:
             firmware_version=camera.firmware_version,
             stream_profiles=camera.stream_profiles,
             is_online=camera.is_online,
+            enabled_detector_types=camera.enabled_detector_types,
         )
         await self._camera_repository.update(updated)
         return updated

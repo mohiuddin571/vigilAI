@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { type MouseEvent, useEffect, useState } from 'react';
+import { type MouseEvent, useEffect, useMemo, useState } from 'react';
 import { mjpegStreamUrl, startStream } from '../../services/streamsApi';
 import { createZone, deleteZone, updateZone } from '../../services/zonesApi';
 import type { ZonePoint, ZoneResponse, ZoneUpdateRequest } from '../../types/zone';
@@ -38,6 +38,11 @@ interface ZoneEditorProps {
 function ZoneEditor({ cameraId }: ZoneEditorProps) {
   const queryClient = useQueryClient();
   const { data: zones } = useZones(cameraId);
+  // Cache-bust per mount — see useLiveStream's mjpegUrl for why: without it
+  // this <img> can reuse a stale cached response for the same URL from an
+  // earlier mount (this tab's last visit, or the Dashboard tile) and render
+  // as a frozen frame instead of a live multipart stream.
+  const mjpegUrl = useMemo(() => `${mjpegStreamUrl(cameraId)}?t=${Date.now()}`, [cameraId]);
   const [points, setPoints] = useState<ZonePoint[]>([]);
   const [name, setName] = useState('');
   const [dwellThresholdSeconds, setDwellThresholdSeconds] = useState(5);
@@ -134,7 +139,7 @@ function ZoneEditor({ cameraId }: ZoneEditorProps) {
     <div className="space-y-3 rounded border border-slate-200 bg-slate-50 p-3">
       <div className="relative">
         <img
-          src={mjpegStreamUrl(cameraId)}
+          src={mjpegUrl}
           alt="Camera view for drawing a loitering zone"
           className="w-full rounded"
         />

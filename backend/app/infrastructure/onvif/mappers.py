@@ -34,6 +34,9 @@ _AUTH_FAULT_HINTS = (
     "authentication",
     "invalid username or password",
     "password mismatch",  # confirmed vendor wording: Matrix MIDR20FL28CWS
+    "permission",
+    "access denied",
+    "forbidden",
 )
 
 

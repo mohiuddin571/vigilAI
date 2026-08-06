@@ -1,4 +1,6 @@
 import type {
+  AnalyticsSettingsResponse,
+  AnalyticsSettingsUpdateRequest,
   CameraConfigResponse,
   CameraConfigUpdateRequest,
   CameraCreateRequest,
@@ -99,6 +101,31 @@ export async function getCameraConfig(
     throw new ApiError(await parseErrorDetail(response), response.status);
   }
   return (await response.json()) as CameraConfigResponse;
+}
+
+export async function getCameraAnalyticsSettings(
+  cameraId: string,
+): Promise<AnalyticsSettingsResponse> {
+  const response = await fetch(`/cameras/${cameraId}/analytics-settings`);
+  if (!response.ok) {
+    throw new ApiError(await parseErrorDetail(response), response.status);
+  }
+  return (await response.json()) as AnalyticsSettingsResponse;
+}
+
+export async function updateCameraAnalyticsSettings(
+  cameraId: string,
+  payload: AnalyticsSettingsUpdateRequest,
+): Promise<AnalyticsSettingsResponse> {
+  const response = await fetch(`/cameras/${cameraId}/analytics-settings`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new ApiError(await parseErrorDetail(response), response.status);
+  }
+  return (await response.json()) as AnalyticsSettingsResponse;
 }
 
 export async function updateCameraConfig(

@@ -1,51 +1,37 @@
-import { useMemo } from 'react';
+import { useState } from 'react';
+import Dialog from '../components/Dialog';
 import Panel from '../components/Panel';
+import AddCameraForm from '../features/camera-onboarding/AddCameraForm';
 import CameraGrid from '../features/dashboard/CameraGrid';
-import RecentEvents from '../features/dashboard/RecentEvents';
-import StatTiles from '../features/dashboard/StatTiles';
-import useAnalyticsEvents from '../hooks/useAnalyticsEvents';
 import useCameras from '../hooks/useCameras';
-import useRecordingsList from '../hooks/useRecordingsList';
 
 /**
- * `/` (docs/UI_UX_DESIGN.md §6.1) — the front door: system-state stat
- * tiles, a camera grid, and a recent-events preview. Every widget's own
- * fetch failure is shown in that widget's spot rather than blanking the
- * whole page (§5.7).
+ * `/` (docs/UI_UX_DESIGN.md §6.1) — the front door: just the camera grid.
+ * "Add Camera" reuses the same dialog + form as `CameraListPage`.
  */
 function DashboardPage() {
-  const last24hStart = useMemo(() => new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), []);
+  const [addCameraOpen, setAddCameraOpen] = useState(false);
 
   const { data: cameras, isLoading: camerasLoading, isError: camerasError } = useCameras();
-  const { data: recordings, isError: recordingsError } = useRecordingsList({});
-  const {
-    data: recentEvents,
-    isError: eventsError,
-  } = useAnalyticsEvents({ start: last24hStart });
-
-  const camerasOnline = cameras?.filter((camera) => camera.is_online).length ?? 0;
-  const activeRecordings = recordings?.filter((recording) => recording.ended_at === null).length ?? 0;
-  const analyticsEnabledApprox = new Set((recentEvents ?? []).map((event) => event.camera_id)).size;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <h1 className="text-2xl font-semibold text-slate-900">Dashboard</h1>
+      <h1 className="text-2xl font-semibold text-slate-900">Cameras</h1>
 
-      {camerasError || recordingsError || eventsError ? (
-        <p className="text-sm text-red-600">Some dashboard data failed to load.</p>
-      ) : null}
+      {camerasError ? <p className="text-sm text-red-600">Failed to load cameras.</p> : null}
 
-      {!camerasLoading && cameras && (
-        <StatTiles
-          camerasOnline={camerasOnline}
-          camerasTotal={cameras.length}
-          activeRecordings={activeRecordings}
-          eventsLast24h={recentEvents?.length ?? 0}
-          analyticsEnabledApprox={analyticsEnabledApprox}
-        />
-      )}
-
-      <Panel title="Cameras">
+      <Panel
+        title="Cameras"
+        actions={
+          <button
+            type="button"
+            onClick={() => setAddCameraOpen(true)}
+            className="rounded bg-slate-900 px-4 py-1.5 text-sm font-medium text-white"
+          >
+            Add camera
+          </button>
+        }
+      >
         {camerasLoading ? (
           <p className="text-sm text-slate-500">Loading cameras…</p>
         ) : (
@@ -53,9 +39,11 @@ function DashboardPage() {
         )}
       </Panel>
 
-      <Panel title="Recent events">
-        <RecentEvents events={recentEvents ?? []} cameras={cameras ?? []} />
-      </Panel>
+      {addCameraOpen && (
+        <Dialog title="Add camera" onClose={() => setAddCameraOpen(false)}>
+          <AddCameraForm onSuccess={() => setAddCameraOpen(false)} />
+        </Dialog>
+      )}
     </div>
   );
 }

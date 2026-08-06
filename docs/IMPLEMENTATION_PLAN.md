@@ -134,7 +134,7 @@ Each milestone lists **Goal**, **Deliverables**, **Files** (primary ones touched
 - Reconnect/backoff verified against real network interruption (unplug/replug or simulated by killing the RTSP source).
 - Frontend live-view component (`<img>`-based MJPEG viewer) with connection-status indicator.
 
-**Files**: `backend/app/infrastructure/streaming/rtsp_frame_source.py`, `backend/app/interfaces/api/streams.py`, `backend/app/interfaces/websocket/stream_status.py`, `frontend/src/features/live-view/**`.
+**Files**: `backend/app/infrastructure/streaming/rtsp_frame_source.py`, `backend/app/interfaces/api/streams.py`, `backend/app/interfaces/websocket/stream_status.py`, `frontend/src/components/LiveView.tsx` (moved here from `features/live-view/` post-M14 once the Dashboard needed it too — see `docs/FOLDER_STRUCTURE.md`).
 
 **Acceptance Criteria**:
 - Live view renders in-browser for the physical camera (or an RTSP test stream) within a few seconds of starting.

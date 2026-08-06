@@ -2,7 +2,10 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import AppShell from './components/AppShell';
 import CameraDetailPage, {
   CameraConfigTab,
+  CameraLiveViewTab,
   CameraOverviewTab,
+  CameraRecordingsTab,
+  CameraSettingsTab,
   CameraZonesTab,
 } from './pages/CameraDetailPage';
 import CameraListPage from './pages/CameraListPage';
@@ -28,6 +31,9 @@ function App() {
               <Route index element={<CameraOverviewTab />} />
               <Route path="config" element={<CameraConfigTab />} />
               <Route path="zones" element={<CameraZonesTab />} />
+              <Route path="live" element={<CameraLiveViewTab />} />
+              <Route path="recordings" element={<CameraRecordingsTab />} />
+              <Route path="settings" element={<CameraSettingsTab />} />
             </Route>
           </Route>
 

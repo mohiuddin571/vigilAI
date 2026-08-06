@@ -31,14 +31,17 @@ flowchart TD
     CameraDetail --> Overview["Tab: Overview"]
     CameraDetail --> Config["Tab: Configuration  /cameras/:id/config"]
     CameraDetail --> Zones["Tab: Zones  /cameras/:id/zones"]
+    CameraDetail --> DetailLive["Tab: Live View  /cameras/:id/live"]
+    CameraDetail --> DetailRecordings["Tab: Recordings  /cameras/:id/recordings"]
 
     Live --> LiveCamera["Live View  /live/:cameraId"]
 
-    Dashboard -. "quick link" .-> CameraDetail
-    Dashboard -. "quick link" .-> LiveCamera
+    Dashboard -. "Configure" .-> CameraDetail
     Events -. "jump to camera at timestamp" .-> Recordings
     Events -. "jump to live" .-> LiveCamera
 ```
+
+The Dashboard camera grid also embeds a live preview directly on each card (§6.1) — not a navigation edge, since it renders in place rather than linking anywhere.
 
 Five top-level destinations in the sidebar, always visible, no login gate. `Cameras` is the only branch with sub-navigation (tabs on a detail page) — matches M14's explicit instruction that "Zone editor [is] accessible from the relevant camera," not a standalone top-level screen.
 
@@ -53,6 +56,8 @@ Five top-level destinations in the sidebar, always visible, no login gate. `Came
 | `/cameras/:cameraId` | Camera Detail → Overview tab | New page composing existing pieces |
 | `/cameras/:cameraId/config` | Camera Detail → Configuration tab | Existing `ConfigPanel`, relocated from inline expansion to a tab |
 | `/cameras/:cameraId/zones` | Camera Detail → Zones tab | Existing `ZoneEditor`, relocated from a global section to a tab |
+| `/cameras/:cameraId/live` | Camera Detail → Live View tab | New tab (§6.5a), reuses `components/LiveView.tsx` scoped to this camera |
+| `/cameras/:cameraId/recordings` | Camera Detail → Recordings tab | New tab (§6.5b), reuses `RecordingsBrowser` with the new `lockedCameraId` prop |
 | `/live` | Live View hub (camera picker, redirects to last-viewed or first camera) | New |
 | `/live/:cameraId` | Live View for one camera | Existing `LiveView` + `DetectionOverlay` + `RecordingControl`, composed on a routed page |
 | `/recordings` | Recordings Browser (optionally pre-filtered via `?camera=&start=&end=`) | Existing `RecordingsBrowser`, relocated to its own route, extended to read query-string presets |
@@ -134,11 +139,11 @@ The only place a "select multiple rows" UI would make sense (Recordings Browser,
 **Purpose**: Answer "what's the state of my system right now?" in one glance; the front door of the app.
 **Widgets**:
 - Stat tiles: cameras online / total (from `CameraResponse.is_online`), currently-recording count (derived: recordings with `ended_at === null`), analytics-enabled source count (derived: distinct `camera_id` values with a `true` status — see note below), events in the last 24h (`GET /analytics/events?start=<now-24h>`, counted client-side).
-- Camera grid: one card per camera — name, online dot, manufacturer/model, "View Live" / "Configure" links. No live thumbnail is fetched for cards the user hasn't opened (starting an MJPEG stream is a stateful side effect on the backend — `streams.py`'s `/mjpeg` handler calls `use_case.execute()` — so the dashboard must not silently start every camera's stream just to render a thumbnail; cards show a static camera icon until visited).
+- Camera grid: one card per camera — name (compact, `text-sm`, so it doesn't compete with the live preview below it), online dot, a delete icon (opens the same `ConfirmDialog` as Camera Detail's Overview tab, `DELETE /cameras/:id`), manufacturer/model, a live `LiveView` tile (auto-connected on mount, auto-disconnected on unmount, `compact` icon-only Connect/Disconnect controls instead of labeled buttons), a "Configure" link. **Revised from the original M14 design**, which deliberately withheld live thumbnails here because starting an MJPEG stream is a stateful backend side effect (`streams.py`'s `/mjpeg` handler calls `use_case.execute()`) and rendering N cards would silently start N camera streams. Per explicit user direction this tradeoff is now accepted — every onboarded camera's stream runs for as long as the Dashboard tab is open. The leak this would otherwise cause is bounded by disconnecting each tile's stream on unmount (`components/LiveView.tsx`'s `autoStart` prop), so navigating away from the Dashboard stops every stream it started. The card's "View Live" link was removed (the tile already shows live video inline) — Camera Detail gained its own Live View tab instead (§6.5a).
 - Recent Events list: last ~8 events across all cameras, newest first, from the same `/analytics/events` call above, each row linking into Event Center.
 - Empty state: per §5.5.
-**Actions**: "Add Camera" (opens the same dialog as Camera List), click a camera card → Camera Detail or Live View.
-**Backend APIs used**: `GET /cameras`, `GET /analytics/events`, `GET /recordings` (for the "currently recording" derived stat).
+**Actions**: "Add Camera" (opens the same dialog as Camera List), "Configure" on a card → Camera Detail (which itself now has Live View and Recordings tabs, §6.5a/§6.5b), delete a camera directly from its card (`DELETE /cameras/:id`, same confirm-dialog copy as Camera Detail's Overview tab).
+**Backend APIs used**: `GET /cameras`, `DELETE /cameras/:id`, `GET /analytics/events`, `GET /recordings` (for the "currently recording" derived stat).
 **Milestones depended on**: M3 (cameras), M6 (recordings), M8–M13 (events exist at all).
 
 *Note on "analytics-enabled source count"*: `GET /analytics/{source_id}/status` is per-source, not a list — there is no "give me every enabled source" endpoint. The dashboard derives this stat from the distinct `camera_id`s appearing in the last-24h events query instead of polling `/status` once per onboarded camera (which would be N requests for a number that's approximate anyway). This is documented here so it isn't mistaken for a literal reflection of enable/disable state — a source with analytics enabled but zero detections in the window won't count. Acceptable for a dashboard glance stat; not used anywhere a precise count matters (Live View's own toggle reads the real per-camera status).
@@ -171,6 +176,20 @@ The only place a "select multiple rows" UI would make sense (Recordings Browser,
 **Actions**: draw + save zone (`POST /zones`), edit an existing zone's thresholds/name (`PATCH /zones/:id` — newly wired to the UI), delete zone (`DELETE /zones/:id`).
 **Backend APIs used**: `GET /zones?camera_id=`, `POST /zones`, `PATCH /zones/:id`, `DELETE /zones/:id`.
 **Milestones depended on**: M11, M12.
+
+### 6.5a Camera Detail — Live View tab (`/cameras/:id/live`)
+**Purpose**: Watch this one camera's live stream without leaving Camera Detail. **Added post-M14** per explicit user direction, replacing the Dashboard tile's former "View live" link out to `/live/:id` — the tile now embeds its own always-on preview (§6.1), so the tile no longer needs to link anywhere for live video, and Camera Detail gained its own tab instead.
+**Widgets**: `components/LiveView.tsx` (shared with the Dashboard tile and `/live/:id`) scoped to this camera — no camera picker, since the tab itself is the scoping; connection-status dot + label; labeled Connect/Disconnect buttons (not the tile's icon-only `compact` mode — this tab has room); analytics overlay toggle + `DetectionOverlay`, composed exactly as `/live/:id` does.
+**Actions**: connect/disconnect (auto-connects on tab entry, disconnects on leaving — an explicit navigation counts as an explicit ask, same reasoning as the Dashboard tile), toggle analytics on/off.
+**Backend APIs used**: same as §6.6 below, scoped to one camera.
+**Milestones depended on**: M5, M8, M9, M10.
+
+### 6.5b Camera Detail — Recordings tab (`/cameras/:id/recordings`)
+**Purpose**: Browse this one camera's recordings without leaving Camera Detail. **Added post-M14** alongside §6.5a.
+**Widgets**: existing `RecordingsBrowser` (§6.7) with a new `lockedCameraId` prop that hides the Camera selector entirely and pins the list — unlike `initialCameraId` (used by the Overview tab's old "View recordings" shortcut and Event Center's deep link), this camera can't be switched away from.
+**Actions**: filter by time range; select a recording to play (existing).
+**Backend APIs used**: `GET /recordings?camera_id=`, `GET /recordings/:id/media`.
+**Milestones depended on**: M6, M7.
 
 ### 6.6 Live View (`/live`, `/live/:cameraId`)
 **Purpose**: Watch a camera's live stream, see analytics overlays, control recording — the operational heart of the app.
