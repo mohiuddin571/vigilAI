@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
+from sqlalchemy import delete as sql_delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -65,6 +66,15 @@ class SqlRecordingRepository(IRecordingRepository):
         row = self._to_row(recording)
         async with self._session_factory() as session:
             await session.merge(row)
+            await session.commit()
+
+    async def delete(self, recording_id: UUID) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                sql_delete(RecordingRow).where(
+                    RecordingRow.id == str(recording_id)  # type: ignore[arg-type]
+                )
+            )
             await session.commit()
 
     def _to_row(self, recording: Recording) -> RecordingRow:

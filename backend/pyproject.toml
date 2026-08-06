@@ -17,6 +17,15 @@ dependencies = [
     "opencv-python-headless>=4.10",
     "ultralytics>=8.4.115",
     "lap>=0.5.12",
+    # OCR for License Plate Recognition (M13, docs/TECHNICAL_DECISIONS.md
+    # TD-07/TD-30). Unlike `ultralytics` (TD-25), this installed cleanly
+    # against the existing `opencv-python-headless` pin — `easyocr` already
+    # depends on `opencv-python-headless` itself, no `[tool.uv]` override
+    # needed. Its own transitive deps (`scikit-image`, `scipy`, `shapely`,
+    # etc.) are unrelated to this project's own polygon-math code (TD-28
+    # deliberately didn't add `shapely` as a direct dependency for that;
+    # this is a different, indirect copy pulled in by `easyocr` itself).
+    "easyocr>=1.7.2",
 ]
 
 [dependency-groups]
@@ -68,7 +77,7 @@ mypy_path = "."
 exclude = ["tests/"]
 
 [[tool.mypy.overrides]]
-module = ["onvif.*", "zeep.*", "cv2.*", "ultralytics.*"]
+module = ["onvif.*", "zeep.*", "cv2.*", "ultralytics.*", "easyocr.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

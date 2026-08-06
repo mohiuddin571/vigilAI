@@ -26,6 +26,9 @@ class CameraRow(SQLModel, table=True):
     firmware_version: str | None = None
     is_online: bool = False
     stream_profiles_json: str = "[]"
+    # NULL means every known detector type is enabled (see `Camera.enabled_detector_types`);
+    # otherwise a JSON-encoded list of plugin ids.
+    enabled_detector_types_json: str | None = None
 
 
 class RecordingRow(SQLModel, table=True):

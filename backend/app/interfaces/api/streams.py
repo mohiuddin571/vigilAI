@@ -52,6 +52,12 @@ def create_streams_router(
         return StreamingResponse(
             _mjpeg_multipart(use_case.frames(camera_id), mjpeg_boundary, mjpeg_jpeg_quality),
             media_type=f"multipart/x-mixed-replace; boundary={mjpeg_boundary}",
+            # Without this, browsers can serve a later <img src="/mjpeg"> mount
+            # (switching tabs, or the Dashboard tile vs. Camera Detail using
+            # the identical URL) from a cached copy of an earlier response
+            # instead of opening a fresh multipart connection, which renders
+            # as one frozen frame until a full page reload.
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
         )
 
     return router

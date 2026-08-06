@@ -36,6 +36,9 @@ class FakeRecordingRepository(IRecordingRepository):
         self.recordings[recording.id] = recording
         self.updated_ids.append(recording.id)
 
+    async def delete(self, recording_id: UUID) -> None:
+        self.recordings.pop(recording_id, None)
+
 
 class FakeRecordingWorker(IRecordingWorker):
     def __init__(self, segments: list[Recording]) -> None:

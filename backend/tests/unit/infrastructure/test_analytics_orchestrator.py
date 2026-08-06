@@ -80,3 +80,46 @@ async def test_plugins_share_one_context_across_calls() -> None:
 async def test_no_plugins_means_no_events() -> None:
     orchestrator = AnalyticsOrchestrator([])
     assert await orchestrator.process(_frame()) == []
+
+
+async def test_enabled_plugin_ids_none_runs_every_plugin() -> None:
+    plugin_a = _RecordingPlugin("a")
+    plugin_b = _RecordingPlugin("b")
+    orchestrator = AnalyticsOrchestrator([plugin_a, plugin_b])
+
+    await orchestrator.process(_frame(), enabled_plugin_ids=None)
+
+    assert len(plugin_a.calls) == 1
+    assert len(plugin_b.calls) == 1
+
+
+async def test_enabled_plugin_ids_skips_plugins_not_in_the_set() -> None:
+    plugin_a = _RecordingPlugin("a")
+    plugin_b = _RecordingPlugin("b")
+    orchestrator = AnalyticsOrchestrator([plugin_a, plugin_b])
+
+    await orchestrator.process(_frame(), enabled_plugin_ids=frozenset({"a"}))
+
+    assert len(plugin_a.calls) == 1
+    assert len(plugin_b.calls) == 0
+
+
+async def test_enabled_plugin_ids_empty_set_skips_every_plugin() -> None:
+    plugin_a = _RecordingPlugin("a")
+    orchestrator = AnalyticsOrchestrator([plugin_a])
+
+    events = await orchestrator.process(_frame(), enabled_plugin_ids=frozenset())
+
+    assert events == []
+    assert len(plugin_a.calls) == 0
+
+
+async def test_enabled_plugin_ids_skipped_plugin_gets_no_context_from_earlier_plugins() -> None:
+    upstream = _RecordingPlugin("upstream")
+    downstream = _RecordingPlugin("downstream")
+    orchestrator = AnalyticsOrchestrator([upstream, downstream])
+
+    await orchestrator.process(_frame(), enabled_plugin_ids=frozenset({"downstream"}))
+
+    assert len(upstream.calls) == 0
+    assert len(downstream.calls) == 1

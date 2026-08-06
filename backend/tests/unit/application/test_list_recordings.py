@@ -40,6 +40,9 @@ class FakeRecordingRepository(IRecordingRepository):
     async def update(self, recording: Recording) -> None:
         raise NotImplementedError
 
+    async def delete(self, recording_id: UUID) -> None:
+        self.recordings.pop(recording_id, None)
+
 
 async def test_execute_passes_filters_through_to_the_repository() -> None:
     recording = Recording(

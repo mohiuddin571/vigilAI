@@ -2,6 +2,7 @@ import json
 from typing import Any
 from uuid import UUID
 
+from sqlalchemy import delete as sql_delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -79,6 +80,13 @@ class SqlCameraRepository(ICameraRepository):
             await session.merge(row)
             await session.commit()
 
+    async def delete(self, camera_id: UUID) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                sql_delete(CameraRow).where(CameraRow.id == str(camera_id))  # type: ignore[arg-type]
+            )
+            await session.commit()
+
     def _to_row(self, camera: Camera) -> CameraRow:
         return CameraRow(
             id=str(camera.id),
@@ -93,6 +101,11 @@ class SqlCameraRepository(ICameraRepository):
             firmware_version=camera.firmware_version,
             is_online=camera.is_online,
             stream_profiles_json=json.dumps([_profile_to_dict(p) for p in camera.stream_profiles]),
+            enabled_detector_types_json=(
+                json.dumps(sorted(camera.enabled_detector_types))
+                if camera.enabled_detector_types is not None
+                else None
+            ),
         )
 
     def _to_entity(self, row: CameraRow) -> Camera:
@@ -109,4 +122,9 @@ class SqlCameraRepository(ICameraRepository):
             firmware_version=row.firmware_version,
             is_online=row.is_online,
             stream_profiles=[_profile_from_dict(d) for d in json.loads(row.stream_profiles_json)],
+            enabled_detector_types=(
+                frozenset(json.loads(row.enabled_detector_types_json))
+                if row.enabled_detector_types_json is not None
+                else None
+            ),
         )

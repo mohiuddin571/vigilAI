@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { type MouseEvent, useEffect, useState } from 'react';
+import { type MouseEvent, useEffect, useMemo, useState } from 'react';
 import { mjpegStreamUrl, startStream } from '../../services/streamsApi';
-import { createZone, deleteZone } from '../../services/zonesApi';
-import type { ZonePoint } from '../../types/zone';
+import { createZone, deleteZone, updateZone } from '../../services/zonesApi';
+import type { ZonePoint, ZoneResponse, ZoneUpdateRequest } from '../../types/zone';
 import useZones from '../../hooks/useZones';
 
 interface ZoneEditorProps {
@@ -28,13 +28,31 @@ interface ZoneEditorProps {
  * save, entirely on the frontend. The overlay SVG uses `viewBox="0 0 1 1"`
  * with `preserveAspectRatio="none"`, so it always maps 1:1 onto that same
  * rendered box regardless of the image's actual pixel size.
+ *
+ * M14 addition: an optional missing-object threshold field (the backend's
+ * `ZoneCreateRequest`/`ZoneResponse` supported `missing_object_threshold_seconds`
+ * since M12, but this editor never surfaced it — a gap found during
+ * docs/UI_UX_DESIGN.md's Phase 2 review, §6.5) plus in-place editing of an
+ * existing zone's fields via `PATCH /zones/{id}` (previously create+delete only).
  */
 function ZoneEditor({ cameraId }: ZoneEditorProps) {
   const queryClient = useQueryClient();
   const { data: zones } = useZones(cameraId);
+  // Cache-bust per mount — see useLiveStream's mjpegUrl for why: without it
+  // this <img> can reuse a stale cached response for the same URL from an
+  // earlier mount (this tab's last visit, or the Dashboard tile) and render
+  // as a frozen frame instead of a live multipart stream.
+  const mjpegUrl = useMemo(() => `${mjpegStreamUrl(cameraId)}?t=${Date.now()}`, [cameraId]);
   const [points, setPoints] = useState<ZonePoint[]>([]);
   const [name, setName] = useState('');
   const [dwellThresholdSeconds, setDwellThresholdSeconds] = useState(5);
+  const [missingObjectThresholdSeconds, setMissingObjectThresholdSeconds] = useState('');
+  const [editingZoneId, setEditingZoneId] = useState<string | null>(null);
+  const [editState, setEditState] = useState<{
+    name: string;
+    dwellThresholdSeconds: string;
+    missingObjectThresholdSeconds: string;
+  } | null>(null);
 
   useEffect(() => {
     startStream(cameraId).catch(() => {
@@ -49,6 +67,17 @@ function ZoneEditor({ cameraId }: ZoneEditorProps) {
     onSuccess: () => {
       setPoints([]);
       setName('');
+      setMissingObjectThresholdSeconds('');
+      queryClient.invalidateQueries({ queryKey: ['zones', cameraId] });
+    },
+  });
+
+  const updateZoneMutation = useMutation({
+    mutationFn: ({ zoneId, payload }: { zoneId: string; payload: ZoneUpdateRequest }) =>
+      updateZone(zoneId, payload),
+    onSuccess: () => {
+      setEditingZoneId(null);
+      setEditState(null);
       queryClient.invalidateQueries({ queryKey: ['zones', cameraId] });
     },
   });
@@ -57,6 +86,32 @@ function ZoneEditor({ cameraId }: ZoneEditorProps) {
     mutationFn: deleteZone,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['zones', cameraId] }),
   });
+
+  function startEditing(zone: ZoneResponse) {
+    setEditingZoneId(zone.id);
+    setEditState({
+      name: zone.name,
+      dwellThresholdSeconds: String(zone.dwell_threshold_seconds),
+      missingObjectThresholdSeconds:
+        zone.missing_object_threshold_seconds != null
+          ? String(zone.missing_object_threshold_seconds)
+          : '',
+    });
+  }
+
+  function saveEditing(zoneId: string) {
+    if (!editState) return;
+    updateZoneMutation.mutate({
+      zoneId,
+      payload: {
+        name: editState.name.trim(),
+        dwell_threshold_seconds: Number(editState.dwellThresholdSeconds),
+        missing_object_threshold_seconds: editState.missingObjectThresholdSeconds
+          ? Number(editState.missingObjectThresholdSeconds)
+          : null,
+      },
+    });
+  }
 
   function handleOverlayClick(event: MouseEvent<SVGSVGElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -72,6 +127,9 @@ function ZoneEditor({ cameraId }: ZoneEditorProps) {
       name: name.trim(),
       polygon: points,
       dwell_threshold_seconds: dwellThresholdSeconds,
+      missing_object_threshold_seconds: missingObjectThresholdSeconds
+        ? Number(missingObjectThresholdSeconds)
+        : null,
     });
   }
 
@@ -81,7 +139,7 @@ function ZoneEditor({ cameraId }: ZoneEditorProps) {
     <div className="space-y-3 rounded border border-slate-200 bg-slate-50 p-3">
       <div className="relative">
         <img
-          src={mjpegStreamUrl(cameraId)}
+          src={mjpegUrl}
           alt="Camera view for drawing a loitering zone"
           className="w-full rounded"
         />
@@ -138,6 +196,18 @@ function ZoneEditor({ cameraId }: ZoneEditorProps) {
             onChange={(event) => setDwellThresholdSeconds(Number(event.target.value))}
           />
         </label>
+        <label className="flex flex-col gap-1 text-sm text-slate-600">
+          Missing-object threshold (seconds, optional)
+          <input
+            type="number"
+            min={0.1}
+            step={0.1}
+            placeholder="Not monitored"
+            className="w-40 rounded border border-slate-300 px-2 py-1"
+            value={missingObjectThresholdSeconds}
+            onChange={(event) => setMissingObjectThresholdSeconds(event.target.value)}
+          />
+        </label>
         <button
           type="button"
           onClick={() => setPoints([])}
@@ -156,21 +226,95 @@ function ZoneEditor({ cameraId }: ZoneEditorProps) {
       </div>
 
       {zones && zones.length > 0 && (
-        <ul className="space-y-1 text-sm text-slate-600">
-          {zones.map((zone) => (
-            <li key={zone.id} className="flex items-center justify-between gap-2">
-              <span>
-                {zone.name} — {zone.dwell_threshold_seconds}s dwell threshold
-              </span>
-              <button
-                type="button"
-                onClick={() => deleteZoneMutation.mutate(zone.id)}
-                className="text-xs text-red-600 hover:underline"
-              >
-                Delete
-              </button>
-            </li>
-          ))}
+        <ul className="space-y-2 text-sm text-slate-600">
+          {zones.map((zone) =>
+            editingZoneId === zone.id && editState ? (
+              <li key={zone.id} className="flex flex-wrap items-end gap-2 rounded border border-slate-200 bg-white p-2">
+                <label className="flex flex-col gap-1 text-xs text-slate-500">
+                  Name
+                  <input
+                    className="rounded border border-slate-300 px-2 py-1 text-sm"
+                    value={editState.name}
+                    onChange={(event) => setEditState({ ...editState, name: event.target.value })}
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-slate-500">
+                  Dwell (s)
+                  <input
+                    type="number"
+                    min={0.1}
+                    step={0.1}
+                    className="w-24 rounded border border-slate-300 px-2 py-1 text-sm"
+                    value={editState.dwellThresholdSeconds}
+                    onChange={(event) =>
+                      setEditState({ ...editState, dwellThresholdSeconds: event.target.value })
+                    }
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-slate-500">
+                  Missing-object (s)
+                  <input
+                    type="number"
+                    min={0.1}
+                    step={0.1}
+                    placeholder="Not monitored"
+                    className="w-32 rounded border border-slate-300 px-2 py-1 text-sm"
+                    value={editState.missingObjectThresholdSeconds}
+                    onChange={(event) =>
+                      setEditState({
+                        ...editState,
+                        missingObjectThresholdSeconds: event.target.value,
+                      })
+                    }
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => saveEditing(zone.id)}
+                  disabled={!editState.name.trim() || updateZoneMutation.isPending}
+                  className="rounded bg-slate-900 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingZoneId(null);
+                    setEditState(null);
+                  }}
+                  className="rounded border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700"
+                >
+                  Cancel
+                </button>
+              </li>
+            ) : (
+              <li key={zone.id} className="flex items-center justify-between gap-2">
+                <span>
+                  {zone.name} — {zone.dwell_threshold_seconds}s dwell threshold
+                  {' · '}
+                  {zone.missing_object_threshold_seconds != null
+                    ? `${zone.missing_object_threshold_seconds}s missing-object threshold`
+                    : 'not monitored for missing objects'}
+                </span>
+                <span className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => startEditing(zone)}
+                    className="text-xs text-slate-600 hover:underline"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => deleteZoneMutation.mutate(zone.id)}
+                    className="text-xs text-red-600 hover:underline"
+                  >
+                    Delete
+                  </button>
+                </span>
+              </li>
+            ),
+          )}
         </ul>
       )}
     </div>

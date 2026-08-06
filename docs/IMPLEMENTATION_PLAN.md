@@ -134,7 +134,7 @@ Each milestone lists **Goal**, **Deliverables**, **Files** (primary ones touched
 - Reconnect/backoff verified against real network interruption (unplug/replug or simulated by killing the RTSP source).
 - Frontend live-view component (`<img>`-based MJPEG viewer) with connection-status indicator.
 
-**Files**: `backend/app/infrastructure/streaming/rtsp_frame_source.py`, `backend/app/interfaces/api/streams.py`, `backend/app/interfaces/websocket/stream_status.py`, `frontend/src/features/live-view/**`.
+**Files**: `backend/app/infrastructure/streaming/rtsp_frame_source.py`, `backend/app/interfaces/api/streams.py`, `backend/app/interfaces/websocket/stream_status.py`, `frontend/src/components/LiveView.tsx` (moved here from `features/live-view/` post-M14 once the Dashboard needed it too — see `docs/FOLDER_STRUCTURE.md`).
 
 **Acceptance Criteria**:
 - Live view renders in-browser for the physical camera (or an RTSP test stream) within a few seconds of starting.
@@ -355,6 +355,12 @@ Each milestone lists **Goal**, **Deliverables**, **Files** (primary ones touched
 - `docker compose up` brings up a working system reachable at documented ports, camera onboarding works from within the container against the LAN camera.
 
 **Dependencies**: M15. Explicitly last — per the assignment brief, do not let this displace core feature time.
+
+---
+
+## Addendum: Camera & Event Lifecycle Management (post-M14)
+
+Not a numbered milestone — real gaps surfaced by using M14's shipped UI (no way to edit/delete a camera, no cascading cleanup of its recordings, no way to clear analytics events, no visibility into per-camera analytics on/off state beyond an approximate dashboard count) rather than planned up front. See `docs/TASK_BACKLOG.md`'s "Camera & Event Lifecycle Management" epic (T-170–T-176) and `docs/TECHNICAL_DECISIONS.md` TD-32 for the cascade-delete design.
 
 ---
 

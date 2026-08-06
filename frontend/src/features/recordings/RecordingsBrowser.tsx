@@ -6,6 +6,26 @@ import type { RecordingResponse } from '../../types/recording';
 
 interface RecordingsBrowserProps {
   cameras: CameraResponse[];
+  /** Preset filters (e.g. from Event Center's "view around this time" deep
+   * link, docs/UI_UX_DESIGN.md §6.8) — ISO 8601, converted to the
+   * `datetime-local` inputs' local-time format. */
+  initialCameraId?: string;
+  initialStartIso?: string;
+  initialEndIso?: string;
+  /** Pins the list to one camera and hides the Camera selector entirely
+   * (Camera Detail's Recordings tab, docs/UI_UX_DESIGN.md §6.5a) — unlike
+   * `initialCameraId`, which only pre-selects the dropdown, this camera can't
+   * be switched away from. */
+  lockedCameraId?: string;
+}
+
+/** ISO 8601 -> `datetime-local` input value (local time, no timezone), the inverse of `toIsoOrUndefined`. */
+function isoToLocalDateTimeInput(iso: string | undefined): string {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function formatSize(bytes: number | null): string {
@@ -28,10 +48,16 @@ function toIsoOrUndefined(localDateTime: string): string | undefined {
 // M7 (Playback): camera/time-range filter controls + a native <video> player
 // with seek, composing alongside (not replacing) RecordingControl.tsx's
 // existing start/stop control and list.
-function RecordingsBrowser({ cameras }: RecordingsBrowserProps) {
-  const [cameraId, setCameraId] = useState<string>('');
-  const [start, setStart] = useState('');
-  const [end, setEnd] = useState('');
+function RecordingsBrowser({
+  cameras,
+  initialCameraId = '',
+  initialStartIso,
+  initialEndIso,
+  lockedCameraId,
+}: RecordingsBrowserProps) {
+  const [cameraId, setCameraId] = useState<string>(lockedCameraId ?? initialCameraId);
+  const [start, setStart] = useState(isoToLocalDateTimeInput(initialStartIso));
+  const [end, setEnd] = useState(isoToLocalDateTimeInput(initialEndIso));
   const [selectedRecording, setSelectedRecording] = useState<RecordingResponse | null>(null);
 
   const { data, isLoading, isError } = useRecordingsList({
@@ -47,21 +73,23 @@ function RecordingsBrowser({ cameras }: RecordingsBrowserProps) {
   return (
     <div className="space-y-3 rounded border border-slate-200 bg-slate-50 p-3">
       <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-sm text-slate-600">
-          Camera
-          <select
-            className="rounded border border-slate-300 px-2 py-1"
-            value={cameraId}
-            onChange={(event) => setCameraId(event.target.value)}
-          >
-            <option value="">All cameras</option>
-            {cameras.map((camera) => (
-              <option key={camera.id} value={camera.id}>
-                {camera.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {!lockedCameraId && (
+          <label className="flex flex-col gap-1 text-sm text-slate-600">
+            Camera
+            <select
+              className="rounded border border-slate-300 px-2 py-1"
+              value={cameraId}
+              onChange={(event) => setCameraId(event.target.value)}
+            >
+              <option value="">All cameras</option>
+              {cameras.map((camera) => (
+                <option key={camera.id} value={camera.id}>
+                  {camera.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="flex flex-col gap-1 text-sm text-slate-600">
           From
           <input

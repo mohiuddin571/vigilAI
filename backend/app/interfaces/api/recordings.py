@@ -6,6 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, status
 from fastapi.responses import FileResponse
 
+from app.application.use_cases.delete_recording import DeleteRecordingUseCase
 from app.application.use_cases.get_recording import GetRecordingUseCase
 from app.application.use_cases.list_recordings import ListRecordingsUseCase
 from app.application.use_cases.start_recording import StartRecordingUseCase
@@ -19,6 +20,7 @@ def create_recordings_router(
     build_stop_recording_use_case: Callable[[], StopRecordingUseCase],
     build_list_recordings_use_case: Callable[[], ListRecordingsUseCase],
     build_get_recording_use_case: Callable[[], GetRecordingUseCase],
+    build_delete_recording_use_case: Callable[[], DeleteRecordingUseCase] | None = None,
 ) -> APIRouter:
     """Build the recording router (T-063/T-070): `/cameras/{id}/recording/*` + `/recordings`.
 
@@ -76,5 +78,11 @@ def create_recordings_router(
                 f"Recording {recording_id}'s file is missing from disk: {file_path}"
             )
         return FileResponse(path=file_path, media_type="video/mp4")
+
+    if build_delete_recording_use_case is not None:
+
+        @router.delete("/recordings/{recording_id}", status_code=status.HTTP_204_NO_CONTENT)
+        async def delete_recording(recording_id: UUID) -> None:
+            await build_delete_recording_use_case().execute(recording_id)
 
     return router

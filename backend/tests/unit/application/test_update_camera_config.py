@@ -109,6 +109,9 @@ class FakeCameraRepository(ICameraRepository):
         self.cameras[camera.id] = camera
         self.update_calls.append(camera)
 
+    async def delete(self, camera_id: UUID) -> None:
+        self.cameras.pop(camera_id, None)
+
 
 def _camera(**overrides: object) -> Camera:
     defaults: dict[str, object] = {

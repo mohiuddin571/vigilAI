@@ -31,6 +31,19 @@ class CameraCreateRequest(BaseModel):
         return value
 
 
+class CameraUpdateRequest(BaseModel):
+    """PATCH /cameras/{id} body. Every field is optional — an omitted field is left at its
+    current persisted value (`UpdateCameraUseCase`). Distinct from `CameraConfigUpdateRequest`
+    (ONVIF encoder settings: resolution/codec/bitrate/fps) and `CameraRtspOverrideRequest`
+    (the public RTSP override) — this is the camera's own identity/connection fields."""
+
+    name: str | None = Field(default=None, min_length=1)
+    ip_address: str | None = None
+    port: int | None = Field(default=None, gt=0, le=65535)
+    username: str | None = Field(default=None, min_length=1)
+    password: str | None = Field(default=None, min_length=1)
+
+
 class CameraRtspOverrideRequest(BaseModel):
     """Update only the optional public RTSP endpoint for an onboarded camera."""
 
@@ -157,6 +170,40 @@ class CameraConfigResponse(BaseModel):
             bitrate_kbps=profile.bitrate.value,
             fps=profile.fps,
         )
+
+
+class AnalyticsSettingsResponse(BaseModel):
+    """GET/PUT /cameras/{id}/analytics-settings response shape.
+
+    `enabled_types: None` means every known detector type is enabled — the
+    default for a camera whose settings were never explicitly changed,
+    mirroring `Camera.enabled_detector_types`'s `None`-means-all semantics.
+    """
+
+    available_types: list[str]
+    enabled_types: list[str] | None
+
+    @classmethod
+    def from_camera(
+        cls, camera: Camera, known_detector_types: frozenset[str]
+    ) -> "AnalyticsSettingsResponse":
+        return cls(
+            available_types=sorted(known_detector_types),
+            enabled_types=(
+                sorted(camera.enabled_detector_types)
+                if camera.enabled_detector_types is not None
+                else None
+            ),
+        )
+
+
+class AnalyticsSettingsUpdateRequest(BaseModel):
+    """PUT /cameras/{id}/analytics-settings body — a full replace, not a
+    partial patch: `enabled_types: null` explicitly means "enable every known
+    type" (matches `Camera.enabled_detector_types`'s domain semantics) rather
+    than "leave unchanged"."""
+
+    enabled_types: list[str] | None
 
 
 class ResolutionUpdate(BaseModel):

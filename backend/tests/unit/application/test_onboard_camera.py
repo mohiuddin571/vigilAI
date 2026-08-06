@@ -85,6 +85,9 @@ class FakeCameraRepository(ICameraRepository):
     async def update(self, camera: Camera) -> None:
         self.cameras[camera.id] = camera
 
+    async def delete(self, camera_id: UUID) -> None:
+        self.cameras.pop(camera_id, None)
+
 
 async def test_onboard_camera_persists_device_info_and_profiles() -> None:
     gateway = FakeCameraGateway()

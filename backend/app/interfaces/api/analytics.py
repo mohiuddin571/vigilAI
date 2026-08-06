@@ -5,13 +5,19 @@ from uuid import UUID
 from fastapi import APIRouter
 
 from app.application.use_cases.analytics_session_registry import AnalyticsSessionRegistry
+from app.application.use_cases.clear_detection_events import ClearDetectionEventsUseCase
 from app.application.use_cases.list_detection_events import ListDetectionEventsUseCase
-from app.interfaces.schemas.analytics import AnalyticsStatusResponse, DetectionEventResponse
+from app.interfaces.schemas.analytics import (
+    AnalyticsStatusResponse,
+    ClearEventsResponse,
+    DetectionEventResponse,
+)
 
 
 def create_analytics_router(
     build_analytics_session_registry: Callable[[], AnalyticsSessionRegistry],
     build_list_detection_events_use_case: Callable[[], ListDetectionEventsUseCase],
+    build_clear_detection_events_use_case: Callable[[], ClearDetectionEventsUseCase] | None = None,
 ) -> APIRouter:
     """Build the `/analytics` router (T-085): enable/disable/status per source + event listing.
 
@@ -51,5 +57,19 @@ def create_analytics_router(
             camera_id, event_type, start, end
         )
         return [DetectionEventResponse.from_domain(event) for event in events]
+
+    if build_clear_detection_events_use_case is not None:
+
+        @router.delete("/events", response_model=ClearEventsResponse)
+        async def clear_events(
+            camera_id: UUID | None = None,
+            event_type: str | None = None,
+            start: datetime | None = None,
+            end: datetime | None = None,
+        ) -> ClearEventsResponse:
+            deleted_count = await build_clear_detection_events_use_case().execute(
+                camera_id, event_type, start, end
+            )
+            return ClearEventsResponse(deleted_count=deleted_count)
 
     return router

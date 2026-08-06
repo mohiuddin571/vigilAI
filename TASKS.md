@@ -28,15 +28,16 @@ Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./
 - [x] Color Detection (M10)
 - [x] Loitering Detection (M11)
 - [x] Missing Object Detection (M12)
+- [x] License Plate Recognition / OCR (M13)
+- [x] Frontend Integration — unified dashboard (M14)
+- [x] Camera & Event Lifecycle Management — edit/delete camera (cascade), delete recording, clear events, per-camera analytics visibility (post-M14 addendum, T-170–T-176). Backend unit-tested (`backend/tests/unit/application/test_{update_camera,delete_camera,delete_recording,clear_detection_events}.py`); manual end-to-end verification against the running system was not completed this session (dev backend became unresponsive mid-session) — do this before considering it demo-ready.
 
 # In Progress
 
-- [ ] _Nothing yet. Next up: License Plate Recognition / OCR (M13)._
+- [ ] _Nothing yet. Next up: Testing, Hardening & Final Documentation Polish (M15)._
 
 # Remaining
 
-- [ ] License Plate Recognition / OCR (M13)
-- [ ] Frontend Integration — unified dashboard (M14)
 - [ ] Testing, Hardening & Final Documentation Polish (M15)
 - [ ] Docker (M16, stretch — time-permitting, explicitly last)
 - [ ] Demo Preparation (not a formal milestone — see note below)

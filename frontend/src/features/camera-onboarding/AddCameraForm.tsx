@@ -4,7 +4,13 @@ import { ApiError, createCamera } from '../../services/camerasApi';
 
 const initialFormState = { ipAddress: '', port: '80', username: '', password: '', rtspUrlOverride: '' };
 
-function AddCameraForm() {
+interface AddCameraFormProps {
+  /** Called after a successful `POST /cameras` — lets the caller (e.g. the
+   * Add Camera dialog on `/cameras`) dismiss itself. */
+  onSuccess?: () => void;
+}
+
+function AddCameraForm({ onSuccess }: AddCameraFormProps = {}) {
   const [form, setForm] = useState(initialFormState);
   const queryClient = useQueryClient();
 
@@ -20,6 +26,7 @@ function AddCameraForm() {
     onSuccess: () => {
       setForm(initialFormState);
       void queryClient.invalidateQueries({ queryKey: ['cameras'] });
+      onSuccess?.();
     },
   });
 

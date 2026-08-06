@@ -9,6 +9,16 @@ export interface CameraCreateRequest {
   rtsp_url_override?: string | null;
 }
 
+/** PATCH /cameras/{id} body (T-170) — every field optional, an omitted field is left at its
+ * current persisted value. Distinct from the RTSP-override and encoder-config PATCH endpoints. */
+export interface CameraUpdateRequest {
+  name?: string;
+  ip_address?: string;
+  port?: number;
+  username?: string;
+  password?: string;
+}
+
 export interface StreamProfileResponse {
   id: string;
   name: string;
@@ -61,4 +71,16 @@ export interface CameraConfigUpdateRequest {
   resolution?: ResolutionUpdate;
   bitrate_kbps?: number;
   fps?: number;
+}
+
+/** GET/PUT /cameras/{id}/analytics-settings response shape. `enabled_types: null`
+ * means every type in `available_types` is enabled (the default, unconfigured state). */
+export interface AnalyticsSettingsResponse {
+  available_types: string[];
+  enabled_types: string[] | null;
+}
+
+/** PUT body — a full replace: `enabled_types: null` explicitly means "enable everything". */
+export interface AnalyticsSettingsUpdateRequest {
+  enabled_types: string[] | null;
 }

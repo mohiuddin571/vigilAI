@@ -33,6 +33,12 @@ class RecordingSessionRegistry:
     def get(self, camera_id: UUID) -> RecordingSession | None:
         return self._sessions.get(camera_id)
 
+    def active_camera_ids(self) -> list[UUID]:
+        """Cameras with a recording currently in progress — used by the
+        composition root's graceful-shutdown path to finalize every
+        in-progress recording's ffmpeg subprocess instead of orphaning it."""
+        return list(self._sessions)
+
     def start(self, camera_id: UUID, worker: IRecordingWorker, first_recording_id: UUID) -> None:
         self._sessions[camera_id] = RecordingSession(worker, first_recording_id)
 

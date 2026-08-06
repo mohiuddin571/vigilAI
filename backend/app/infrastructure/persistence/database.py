@@ -35,3 +35,7 @@ async def init_db(engine: AsyncEngine) -> None:
             )
             if "rtsp_url_override" not in column_names:
                 await conn.execute(text("ALTER TABLE camera ADD COLUMN rtsp_url_override VARCHAR"))
+            if "enabled_detector_types_json" not in column_names:
+                await conn.execute(
+                    text("ALTER TABLE camera ADD COLUMN enabled_detector_types_json VARCHAR")
+                )

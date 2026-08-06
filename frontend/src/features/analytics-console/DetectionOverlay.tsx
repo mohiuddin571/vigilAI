@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { analyticsEventsWebSocketUrl, enableAnalytics } from '../../services/analyticsApi';
+import { analyticsEventsWebSocketUrl } from '../../services/analyticsApi';
 import type { DetectionEventResponse } from '../../types/analytics';
 
 interface DetectionOverlayProps {
@@ -9,9 +9,10 @@ interface DetectionOverlayProps {
 /**
  * Renders YOLO detection boxes/labels over a live view (T-093).
  *
- * Rendered as a slot passed into `live-view/LiveView.tsx` from `App.tsx`
- * rather than imported by LiveView directly — `features/` never import each
- * other (docs/FOLDER_STRUCTURE.md). `BoundingBox` is already normalized to
+ * Rendered as a slot passed into `components/LiveView.tsx` from the
+ * page/feature composing both, rather than imported by LiveView directly —
+ * `features/` never import each other (docs/FOLDER_STRUCTURE.md).
+ * `BoundingBox` is already normalized to
  * `[0, 1]`, so boxes are positioned with plain percentages against this
  * component's `inset-0` parent (the same relative wrapper LiveView renders
  * its `<img>` in) — no pixel/DOM-measurement math needed.
@@ -30,17 +31,16 @@ interface DetectionOverlayProps {
  * rendered per detected object; the color is merged into that box's label
  * by matching `color_detection.*` events back to their source detection via
  * `metadata.source_event_id`.
+ *
+ * Does *not* call `enableAnalytics` itself (M14 change) — Live View owns
+ * that via an explicit toggle (`useAnalyticsStatus`, docs/UI_UX_DESIGN.md
+ * §6.6) so the operator has a way to turn it back off, which an
+ * unconditional enable-on-mount never allowed. Callers should only render
+ * this component while analytics is known to be enabled for `cameraId`.
  */
 function DetectionOverlay({ cameraId }: DetectionOverlayProps) {
   const [detections, setDetections] = useState<DetectionEventResponse[]>([]);
   const currentSequenceRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    enableAnalytics(cameraId).catch(() => {
-      // Best-effort: this source may not be analytics-enableable (yet), or
-      // may already be enabled — the overlay simply stays empty either way.
-    });
-  }, [cameraId]);
 
   useEffect(() => {
     const socket = new WebSocket(analyticsEventsWebSocketUrl());

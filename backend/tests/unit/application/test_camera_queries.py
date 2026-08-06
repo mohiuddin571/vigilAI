@@ -25,6 +25,9 @@ class FakeCameraRepository(ICameraRepository):
     async def update(self, camera: Camera) -> None:
         self.cameras[camera.id] = camera
 
+    async def delete(self, camera_id: UUID) -> None:
+        self.cameras.pop(camera_id, None)
+
 
 async def test_list_cameras_returns_every_persisted_camera() -> None:
     camera = Camera(name="Front Door", ip_address="10.0.0.5", username="admin")

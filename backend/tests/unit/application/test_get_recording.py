@@ -22,6 +22,9 @@ class FakeRecordingRepository(IRecordingRepository):
     async def update(self, recording: Recording) -> None:
         self.recordings[recording.id] = recording
 
+    async def delete(self, recording_id: UUID) -> None:
+        self.recordings.pop(recording_id, None)
+
     async def list(
         self,
         camera_id: UUID | None = None,

@@ -165,3 +165,66 @@ async def test_disable_on_a_source_with_no_session_is_a_no_op() -> None:
     registry = AnalyticsSessionRegistry(_fail_build_use_case)
     await registry.disable("never-enabled")  # must not raise
     assert registry.is_enabled("never-enabled") is False
+
+
+async def test_restart_on_a_source_with_no_session_is_a_no_op() -> None:
+    registry = AnalyticsSessionRegistry(_fail_build_use_case)
+    await registry.restart("never-enabled")  # must not raise / build anything
+    assert registry.is_enabled("never-enabled") is False
+
+
+async def test_restart_rebuilds_the_session_and_stops_the_old_source() -> None:
+    sources: list[_FakeSource] = []
+
+    async def build_use_case(source_id: str) -> RunAnalyticsPipelineUseCase:
+        # A fresh, never-yet-exhausted source each build, unlike the module
+        # dict-keyed `_FakeSource` fixture other tests share by source_id —
+        # `restart` needs to distinguish the pre- and post-rebuild source.
+        source = _FakeSource(source_id, frame_count=1000)
+        sources.append(source)
+        return RunAnalyticsPipelineUseCase(
+            source,  # type: ignore[arg-type]
+            lambda frame: _async_none(),
+            _FakeEventPublisher(),  # type: ignore[arg-type]
+        )
+
+    registry = AnalyticsSessionRegistry(build_use_case)
+    await registry.enable("mp4-demo")
+    assert len(sources) == 1
+
+    await registry.restart("mp4-demo")
+    for _ in range(1000):
+        if sources[-1].start_calls:
+            break
+        await asyncio.sleep(0)
+
+    assert len(sources) == 2
+    assert sources[0].stop_calls == 1  # old source released, not leaked
+    assert sources[1].start_calls == 1  # new source is the one now running
+    assert registry.is_enabled("mp4-demo") is True
+
+    sources[1].release()
+
+
+async def test_restart_preserves_a_disabled_session_as_disabled() -> None:
+    sources: list[_FakeSource] = []
+
+    async def build_use_case(source_id: str) -> RunAnalyticsPipelineUseCase:
+        source = _FakeSource(source_id, frame_count=1000)
+        sources.append(source)
+        return RunAnalyticsPipelineUseCase(
+            source,  # type: ignore[arg-type]
+            lambda frame: _async_none(),
+            _FakeEventPublisher(),  # type: ignore[arg-type]
+        )
+
+    registry = AnalyticsSessionRegistry(build_use_case)
+    await registry.enable("mp4-demo")
+    await registry.disable("mp4-demo")
+    assert registry.is_enabled("mp4-demo") is False
+
+    await registry.restart("mp4-demo")
+
+    assert registry.is_enabled("mp4-demo") is False
+
+    sources[1].release()
