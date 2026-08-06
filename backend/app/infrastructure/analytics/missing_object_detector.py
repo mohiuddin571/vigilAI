@@ -9,7 +9,7 @@ from app.domain.entities.analytics_zone import AnalyticsZone
 from app.domain.entities.detection_event import DetectionEvent
 from app.domain.entities.frame import Frame
 from app.domain.value_objects.bounding_box import BoundingBox
-from app.infrastructure.analytics.geometry import foot_point, point_in_polygon
+from app.infrastructure.analytics.geometry import foot_point, iou, point_in_polygon
 from app.infrastructure.analytics.yolo_detector import EVENTS_BY_SOURCE_CONTEXT_KEY
 
 # Namespaced per docs/ARCHITECTURE.md §6.4's guidance ("the baseline reference
@@ -24,6 +24,11 @@ from app.infrastructure.analytics.yolo_detector import EVENTS_BY_SOURCE_CONTEXT_
 BASELINE_CONTEXT_KEY = "missing_object_detector.baseline"
 
 _EVENT_TYPE = "missing_object_detection.object_missing"
+
+# Minimum IoU (against a baseline entry's last-known bounding box) for an
+# unmatched in-zone detection to be accepted as that same object reappearing
+# under a new track_id, rather than treated as a distinct object.
+_REID_IOU_THRESHOLD = 0.3
 
 
 @dataclass
@@ -102,6 +107,19 @@ class MissingObjectDetector(IDetectorPlugin):
     design above — no separate mechanism. A brief occlusion (detection lost,
     then regained under the same track_id before the threshold) resets
     `absent_since` before it ever crosses the threshold, so no event fires.
+
+    **Track re-identification**: a baseline track_id that goes missing is
+    also matched, each frame, against any *unclaimed* in-zone detection of
+    the same class whose bounding box overlaps (IoU) its last-known position
+    above `_REID_IOU_THRESHOLD`. If matched, the baseline entry is re-keyed
+    to the new track_id and treated as present (timer reset) instead of
+    absent. This closes a real false-positive gap: a tracker (ByteTrack)
+    relabeling a stationary object after a brief detection gap — which can
+    happen around zone edits, since deleting and recreating a zone forces a
+    fresh baseline capture on the very next in-zone frame — would otherwise
+    be indistinguishable from the object actually having been removed, and
+    would eventually fire once the old track_id's "absence" crossed the
+    threshold even though the object never moved.
     """
 
     def __init__(self, zone_repository: IAnalyticsZoneRepository) -> None:
@@ -176,25 +194,63 @@ class MissingObjectDetector(IDetectorPlugin):
             }
             return []
 
+        unclaimed_events = dict(in_zone_now)
+        resolved: dict[int, DetectionEvent | None] = {}
+        for track_id in baseline:
+            resolved[track_id] = unclaimed_events.pop(track_id, None)
+
+        # Re-identify baseline tracks whose track_id didn't match directly —
+        # a tracker relabel, not necessarily a real absence (see class
+        # docstring's "Track re-identification" section).
+        for track_id, resolved_event in resolved.items():
+            if resolved_event is not None:
+                continue
+            entry = baseline[track_id]
+            if entry.bounding_box is None:
+                continue
+            best_candidate_id: int | None = None
+            best_score = _REID_IOU_THRESHOLD
+            for candidate_id, candidate_event in unclaimed_events.items():
+                if candidate_event.metadata.get("class_label") != entry.class_label:
+                    continue
+                if candidate_event.bounding_box is None:
+                    continue
+                score = iou(entry.bounding_box, candidate_event.bounding_box)
+                if score > best_score:
+                    best_score = score
+                    best_candidate_id = candidate_id
+            if best_candidate_id is not None:
+                resolved[track_id] = unclaimed_events.pop(best_candidate_id)
+
         events: list[DetectionEvent] = []
+        rekeyed_baseline: dict[int, _TrackedBaseline] = {}
         for track_id, entry in baseline.items():
-            source_event = in_zone_now.get(track_id)
+            source_event = resolved[track_id]
             if source_event is not None:
                 entry.bounding_box = source_event.bounding_box
                 entry.absent_since = None
                 entry.fired = False
+                rekeyed_baseline[source_event.metadata["track_id"]] = entry
                 continue
             if entry.absent_since is None:
                 entry.absent_since = frame.timestamp
-                continue
-            absence_seconds = (frame.timestamp - entry.absent_since).total_seconds()
-            if absence_seconds >= threshold_seconds and not entry.fired:
-                entry.fired = True
-                events.append(
-                    self._build_event(
-                        frame, zone, camera_id, track_id, entry, absence_seconds, threshold_seconds
+            else:
+                absence_seconds = (frame.timestamp - entry.absent_since).total_seconds()
+                if absence_seconds >= threshold_seconds and not entry.fired:
+                    entry.fired = True
+                    events.append(
+                        self._build_event(
+                            frame,
+                            zone,
+                            camera_id,
+                            track_id,
+                            entry,
+                            absence_seconds,
+                            threshold_seconds,
+                        )
                     )
-                )
+            rekeyed_baseline[track_id] = entry
+        per_source_baseline[zone.id] = rekeyed_baseline
         return events
 
     def _build_event(

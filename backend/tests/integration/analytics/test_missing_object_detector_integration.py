@@ -357,6 +357,72 @@ async def test_process_ignores_other_sources_state_in_shared_context() -> None:
     assert source_b_events == []
 
 
+async def test_track_id_relabel_does_not_fire_when_position_still_overlaps() -> None:
+    """A tracker (ByteTrack) can relabel a stationary object's track_id after
+    a brief detection gap without the object ever having moved — e.g. right
+    around a zone being deleted and recreated, which forces a fresh baseline
+    capture on the very next in-zone frame. The re-identification fallback
+    (IoU + class match against the baseline entry's last-known box) must
+    treat this as the same object reappearing, not as it going missing."""
+    zone = AnalyticsZone(
+        camera_id=_CAMERA_ID,
+        name="Storage room",
+        polygon=_FULL_FRAME_ZONE_POLYGON,
+        dwell_threshold_seconds=5.0,
+        missing_object_threshold_seconds=5.0,
+    )
+    detector = MissingObjectDetector(zone_repository=_FakeZoneRepository([zone]))
+    context: dict = {}
+
+    # t=0: baseline capture under track_id=1.
+    frame0 = _frame(0, _SOURCE_ID, sequence=0)
+    _set_context_events(context, frame0, [_source_event(frame0, _CAMERA_ID, track_id=1)])
+    assert await detector.process(frame0, context) == []
+
+    # t=1..20: the object never moves (same box, same class) but the
+    # tracker relabels it to track_id=2 from t=1 onward — well past the 5s
+    # threshold, this must never fire.
+    for second in range(1, 21):
+        frame = _frame(second, _SOURCE_ID, sequence=second)
+        _set_context_events(context, frame, [_source_event(frame, _CAMERA_ID, track_id=2)])
+        assert await detector.process(frame, context) == []
+
+    baseline = context[BASELINE_CONTEXT_KEY][_SOURCE_ID][zone.id]
+    assert list(baseline.keys()) == [2]  # re-keyed from 1 to 2
+    assert baseline[2].absent_since is None
+
+
+async def test_track_id_relabel_to_non_overlapping_position_still_fires() -> None:
+    """Re-identification must not paper over a genuine absence: if the new
+    track_id's box doesn't overlap the baseline's last-known position, it's
+    a different object, not a relabel, and the original must still fire."""
+    zone = AnalyticsZone(
+        camera_id=_CAMERA_ID,
+        name="Storage room",
+        polygon=_FULL_FRAME_ZONE_POLYGON,
+        dwell_threshold_seconds=5.0,
+        missing_object_threshold_seconds=5.0,
+    )
+    detector = MissingObjectDetector(zone_repository=_FakeZoneRepository([zone]))
+    context: dict = {}
+    far_box = BoundingBox(x_min=0.0, y_min=0.0, x_max=0.1, y_max=0.1)
+
+    frame0 = _frame(0, _SOURCE_ID, sequence=0)
+    _set_context_events(context, frame0, [_source_event(frame0, _CAMERA_ID, track_id=1)])
+    assert await detector.process(frame0, context) == []
+
+    fired_events: list[DetectionEvent] = []
+    for second in range(1, 9):
+        frame = _frame(second, _SOURCE_ID, sequence=second)
+        _set_context_events(
+            context, frame, [_source_event(frame, _CAMERA_ID, track_id=2, box=far_box)]
+        )
+        fired_events.extend(await detector.process(frame, context))
+
+    assert len(fired_events) == 1
+    assert fired_events[0].metadata["track_id"] == 1
+
+
 async def test_process_skips_detections_without_a_track_id() -> None:
     zone = AnalyticsZone(
         camera_id=_CAMERA_ID,
