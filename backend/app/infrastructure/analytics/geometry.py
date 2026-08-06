@@ -33,3 +33,21 @@ def foot_point(box: BoundingBox) -> tuple[float, float]:
     stands, unlike the box's visual center (which sits on a person's torso,
     not their feet). This is the point tested for zone containment."""
     return ((box.x_min + box.x_max) / 2, box.y_max)
+
+
+def iou(box_a: BoundingBox, box_b: BoundingBox) -> float:
+    """Intersection-over-union of two normalized `[0, 1]` bounding boxes.
+
+    Used to re-identify a tracked object across a track_id change (e.g. a
+    tracker relabeling it after a brief detection gap) by matching its last-
+    known position rather than its (now-stale) track_id.
+    """
+    x_min = max(box_a.x_min, box_b.x_min)
+    y_min = max(box_a.y_min, box_b.y_min)
+    x_max = min(box_a.x_max, box_b.x_max)
+    y_max = min(box_a.y_max, box_b.y_max)
+    if x_max <= x_min or y_max <= y_min:
+        return 0.0
+    intersection = (x_max - x_min) * (y_max - y_min)
+    union = box_a.width * box_a.height + box_b.width * box_b.height - intersection
+    return intersection / union if union > 0 else 0.0
