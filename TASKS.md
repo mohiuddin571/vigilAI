@@ -27,7 +27,7 @@ Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./
 - [x] Object Tracking (ByteTrack, used by M9/M11)
 - [x] Color Detection (M10)
 - [x] Loitering Detection (M11)
-- [x] Missing Object Detection (M12)
+- [x] Missing Object Detection (M12). Post-M12 fix: `MissingObjectDetector` now re-identifies a baseline track across a tracker (ByteTrack) track_id relabel via class-label + IoU matching against its last-known bounding box — previously a relabel (e.g. one triggered by deleting and recreating a zone, which forces a fresh baseline capture on the next in-zone frame) was indistinguishable from the object actually leaving, firing a false `missing_object_detection.object_missing` event even though the object never moved. See `backend/app/infrastructure/analytics/missing_object_detector.py` and `geometry.py::iou`.
 - [x] License Plate Recognition / OCR (M13)
 - [x] Frontend Integration — unified dashboard (M14)
 - [x] Camera & Event Lifecycle Management — edit/delete camera (cascade), delete recording, clear events, per-camera analytics visibility (post-M14 addendum, T-170–T-176). Backend unit-tested (`backend/tests/unit/application/test_{update_camera,delete_camera,delete_recording,clear_detection_events}.py`); manual end-to-end verification against the running system was not completed this session (dev backend became unresponsive mid-session) — do this before considering it demo-ready.
