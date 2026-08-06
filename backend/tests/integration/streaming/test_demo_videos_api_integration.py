@@ -133,7 +133,9 @@ async def test_start_unknown_video_id_returns_404(tmp_path: Path) -> None:
 def test_demo_stream_status_websocket_pushes_status(tmp_path: Path) -> None:
     video_id = _seed_video(tmp_path)
     app = _build_app(tmp_path)
-    with TestClient(app) as client:
-        with client.websocket_connect(f"/ws/demo/videos/{video_id}/status") as websocket:
-            message = websocket.receive_json()
-            assert message["state"] == "stopped"
+    with (
+        TestClient(app) as client,
+        client.websocket_connect(f"/ws/demo/videos/{video_id}/status") as websocket,
+    ):
+        message = websocket.receive_json()
+        assert message["state"] == "stopped"

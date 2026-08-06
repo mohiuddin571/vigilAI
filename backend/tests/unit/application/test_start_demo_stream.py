@@ -19,7 +19,9 @@ class FakeDemoVideoRepository(IDemoVideoRepository):
         self._paths = paths
 
     def list_videos(self) -> list[DemoVideo]:
-        return [DemoVideo(id=video_id, filename=path.name) for video_id, path in self._paths.items()]
+        return [
+            DemoVideo(id=video_id, filename=path.name) for video_id, path in self._paths.items()
+        ]
 
     def resolve_path(self, video_id: str) -> Path | None:
         return self._paths.get(video_id)
