@@ -12,6 +12,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Cameras' },
   { to: '/recordings', label: 'Recordings' },
   { to: '/events', label: 'Event Center' },
+  { to: '/demo', label: 'Demo Videos' },
 ];
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>

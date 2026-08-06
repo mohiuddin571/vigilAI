@@ -1,6 +1,6 @@
 # TASKS.md — Living Implementation Checklist
 
-Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./docs/IMPLEMENTATION_PLAN.md) (milestone detail: goals, deliverables, acceptance criteria) and [docs/TASK_BACKLOG.md](./docs/TASK_BACKLOG.md) (task-level detail: priority, complexity, dependencies, Definition of Done) — it doesn't replace either. Milestone IDs (`M0`–`M16`) in parentheses are how a line here maps back to that detail.
+Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./docs/IMPLEMENTATION_PLAN.md) (milestone detail: goals, deliverables, acceptance criteria) and [docs/TASK_BACKLOG.md](./docs/TASK_BACKLOG.md) (task-level detail: priority, complexity, dependencies, Definition of Done) — it doesn't replace either. Milestone IDs (`M0`–`M17`) in parentheses are how a line here maps back to that detail.
 
 **How to maintain this file**: when a task starts, move its line from Remaining to In Progress; when it meets its acceptance criteria per TASK_BACKLOG.md, move it to Completed. Update in the same PR as the work, per [AGENTS.md](./AGENTS.md) § Pull Request Guidelines.
 
@@ -40,10 +40,10 @@ Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./
 
 - [ ] Testing, Hardening & Final Documentation Polish (M15)
 - [ ] Docker (M16, stretch — time-permitting, explicitly last)
-- [ ] Demo Preparation (not a formal milestone — see note below)
+- [ ] Demo Video Library — play a pre-recorded clip with no camera, demo License Plate Recognition against it (M17, T-205–T-209)
 
 ---
 
-**Note on "Demo Preparation"**: not tracked as a milestone in `docs/IMPLEMENTATION_PLAN.md` since it's evaluation logistics rather than system design. When it's time to plan it, either add detail here directly or promote it to an `M17` entry in IMPLEMENTATION_PLAN.md — don't let scope accumulate silently under this one line.
+**Note on "Demo Preparation"**: promoted to the `M17` entry above (`docs/IMPLEMENTATION_PLAN.md` §M17, `docs/TASK_BACKLOG.md` "Epic: M17") per this note's own instruction, rather than accumulating further detail here.
 
 **Note on ordering**: this list follows `docs/IMPLEMENTATION_PLAN.md`'s actual build order, not a flat feature list — most notably, Video Source Abstraction (M2) comes before ONVIF work (M3/M4) because the analytics pipeline is proven against local MP4 files before any camera dependency exists, and Analytics Pipeline Foundation (M8) comes before individual analytics capabilities (M9–M13) because it's what makes those capabilities source-agnostic rather than ONVIF-specific. See IMPLEMENTATION_PLAN.md's "Milestone Dependency Graph" for the full picture. M3 landing before M2 in the Completed list above is not a deviation from this: `docs/IMPLEMENTATION_PLAN.md` §M3's own Dependencies line states M3 depends only on M1 and is explicitly "Independent of M2 — can be built in parallel if needed."

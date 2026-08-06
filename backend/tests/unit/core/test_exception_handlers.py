@@ -8,6 +8,7 @@ from app.domain.exceptions import (
     CameraAuthenticationError,
     CameraNotFoundError,
     CameraUnreachableError,
+    DemoVideoNotFoundError,
     InvalidDomainStateError,
     UnsupportedConfigurationError,
 )
@@ -26,6 +27,7 @@ def _build_app() -> FastAPI:
             "unsupported": UnsupportedConfigurationError,
             "invalid_state": InvalidDomainStateError,
             "zone_not_found": AnalyticsZoneNotFoundError,
+            "demo_video_not_found": DemoVideoNotFoundError,
         }
         raise exceptions[exc_name]("boom")
 
@@ -41,6 +43,7 @@ def _build_app() -> FastAPI:
         ("unsupported", 422),
         ("invalid_state", 422),
         ("zone_not_found", 404),
+        ("demo_video_not_found", 404),
     ],
 )
 async def test_domain_exceptions_map_to_typed_4xx(exc_name: str, expected_status: int) -> None:

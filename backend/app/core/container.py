@@ -29,6 +29,7 @@ import structlog
 from app.application.ports.analytics_zone_repository import IAnalyticsZoneRepository
 from app.application.ports.camera_gateway import ICameraGateway
 from app.application.ports.camera_repository import ICameraRepository
+from app.application.ports.demo_video_repository import IDemoVideoRepository
 from app.application.ports.detector_plugin import IDetectorPlugin
 from app.application.ports.event_repository import IEventRepository
 from app.application.ports.frame_source import IFrameSource
@@ -47,12 +48,14 @@ from app.application.use_cases.get_camera_config import GetCameraConfigUseCase
 from app.application.use_cases.get_recording import GetRecordingUseCase
 from app.application.use_cases.get_zone import GetZoneUseCase
 from app.application.use_cases.list_cameras import ListCamerasUseCase
+from app.application.use_cases.list_demo_videos import ListDemoVideosUseCase
 from app.application.use_cases.list_detection_events import ListDetectionEventsUseCase
 from app.application.use_cases.list_recordings import ListRecordingsUseCase
 from app.application.use_cases.list_zones_by_camera import ListZonesByCameraUseCase
 from app.application.use_cases.onboard_camera import OnboardCameraUseCase
 from app.application.use_cases.recording_session_registry import RecordingSessionRegistry
 from app.application.use_cases.run_analytics_pipeline import RunAnalyticsPipelineUseCase
+from app.application.use_cases.start_demo_stream import StartDemoStreamUseCase
 from app.application.use_cases.start_live_stream import StartLiveStreamUseCase
 from app.application.use_cases.start_recording import StartRecordingUseCase
 from app.application.use_cases.stop_recording import StopRecordingUseCase
@@ -83,6 +86,7 @@ from app.infrastructure.persistence.event_repository import SqlEventRepository
 from app.infrastructure.persistence.recording_repository import SqlRecordingRepository
 from app.infrastructure.persistence.sql_camera_repository import SqlCameraRepository
 from app.infrastructure.security.credential_cipher import CredentialCipher
+from app.infrastructure.streaming.local_demo_video_repository import LocalDemoVideoRepository
 from app.infrastructure.streaming.local_recording_file_store import LocalRecordingFileStore
 from app.infrastructure.streaming.mp4_frame_source import Mp4FileFrameSource
 from app.infrastructure.streaming.recording_worker import FfmpegRecordingWorker
@@ -193,6 +197,13 @@ class Container:
             camera_repository=self.build_camera_repository(),
             build_stream_worker=self._build_live_stream_worker,
         )
+        self._demo_video_repository: IDemoVideoRepository = LocalDemoVideoRepository(
+            settings.demo_videos_dir
+        )
+        self._start_demo_stream_use_case = StartDemoStreamUseCase(
+            demo_video_repository=self._demo_video_repository,
+            build_stream_worker=self._build_demo_stream_worker,
+        )
         self._recording_session_registry = RecordingSessionRegistry()
         self._start_recording_use_case = StartRecordingUseCase(
             camera_gateway_factory=self.build_camera_gateway,
@@ -229,6 +240,7 @@ class Container:
         logger.info("container.shutdown_started")
         await self._debug_stream_use_case.stop()
         await self._start_live_stream_use_case.stop_all()
+        await self._start_demo_stream_use_case.stop_all()
         stop_recording = self.build_stop_recording_use_case()
         for camera_id in self._recording_session_registry.active_camera_ids():
             try:
@@ -386,6 +398,31 @@ class Container:
             frame_queue_max_size=self._settings.stream_worker_frame_queue_max_size,
         )
 
+    def _build_demo_stream_worker(self, video_id: str, file_path: Path) -> StreamWorker:
+        # Same `functools.partial`-over-a-module-level-class shape as
+        # `_build_debug_stream_worker`/`_build_live_stream_worker` (picklable
+        # plain str args only, for the `multiprocessing` spawn boundary).
+        frame_source_factory = functools.partial(
+            Mp4FileFrameSource,
+            file_path=str(file_path),
+            source_id=video_id,
+            loop=True,
+        )
+        return StreamWorker(
+            frame_source_factory=frame_source_factory,
+            backoff_schedule=self._settings.stream_worker_reconnect_backoff_seconds,
+            frame_queue_max_size=self._settings.stream_worker_frame_queue_max_size,
+        )
+
+    def build_list_demo_videos_use_case(self) -> ListDemoVideosUseCase:
+        return ListDemoVideosUseCase(self._demo_video_repository)
+
+    def build_start_demo_stream_use_case(self) -> StartDemoStreamUseCase:
+        """Returns the single shared `StartDemoStreamUseCase` instance (M17), for the
+        same reason as `build_start_live_stream_use_case`: it holds a registry of
+        running demo Stream Workers across requests."""
+        return self._start_demo_stream_use_case
+
     def build_debug_stream_use_case(self) -> DebugStreamUseCase:
         """Returns the single shared `DebugStreamUseCase` instance (T-025).
 
@@ -399,15 +436,21 @@ class Container:
     async def _build_analytics_frame_source(self, source_id: str) -> IFrameSource:
         # M9 (docs/TECHNICAL_DECISIONS.md TD-25) widens M8's "mp4-demo"-only
         # source to also accept a real onboarded camera's id, resolved the
-        # same way `_build_live_stream_worker` resolves one for live view —
-        # wrapped in `SupervisedFrameSource` either way, so consumption goes
+        # same way `_build_live_stream_worker` resolves one for live view.
+        # M17 adds a third branch for the demo video library, checked before
+        # the camera-UUID fallback since a demo video's `source_id` is a
+        # filename-derived slug, never a UUID — wrapped in
+        # `SupervisedFrameSource` in every branch, so consumption goes
         # through the same `ReconnectSupervisor` reconnect/backoff path M5's
         # live-view and M6's recording already build on (docs/IMPLEMENTATION_PLAN.md
         # §M8's Constraints, unchanged by this milestone).
+        demo_video_path = self._demo_video_repository.resolve_path(source_id)
         if source_id == _ANALYTICS_MP4_SOURCE_ID:
             source: IFrameSource = Mp4FileFrameSource(
                 file_path=str(_DEBUG_MP4_FIXTURE_PATH), source_id=source_id
             )
+        elif demo_video_path is not None:
+            source = Mp4FileFrameSource(file_path=str(demo_video_path), source_id=source_id)
         else:
             source = await self._build_camera_analytics_source(source_id)
         return SupervisedFrameSource(

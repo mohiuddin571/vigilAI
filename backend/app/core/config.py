@@ -99,5 +99,11 @@ class Settings(BaseSettings):
     # `stream_worker_frame_queue_max_size` (M2, TD-20).
     lpr_ocr_queue_max_size: int = 10
 
+    # Demo video library (M17, T-205). Gitignored, like storage/recordings/
+    # and storage/models/ — operators drop their own pre-recorded clips here
+    # to demo analytics (e.g. License Plate Recognition) without a live
+    # camera. Scanned directly from disk, no DB table (docs/FOLDER_STRUCTURE.md).
+    demo_videos_dir: Path = _REPO_ROOT / "storage" / "demo_videos"
+
 
 settings = Settings()  # type: ignore[call-arg]

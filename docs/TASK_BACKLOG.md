@@ -183,6 +183,20 @@ This backlog is the fine-grained, trackable breakdown of [IMPLEMENTATION_PLAN.md
 
 ---
 
+## Epic: M17 — Demo Video Library
+
+Promoted from `TASKS.md`'s "Demo Preparation" placeholder (see that file's own note). Originally scoped as a YouTube-`<iframe>` embed; rejected during scoping (see `docs/IMPLEMENTATION_PLAN.md` §M17's "Explicitly out of scope") since a YouTube embed can't expose frames to the backend for real analytics — a folder of operator-provided files, generalizing the existing single-fixture `"mp4-demo"` debug source, keeps the same architecture with no new dependency.
+
+| ID | Task | Priority | Complexity | Dependencies | Definition of Done |
+|---|---|---|---|---|---|
+| T-205 | `IDemoVideoRepository` + `LocalDemoVideoRepository` (filesystem scan, slug ids) | P1 | S | M2 | Lists/resolves files in `storage/demo_videos/`; an id that isn't one just-listed resolves to `None` (path-traversal-safe by construction) |
+| T-206 | `StartDemoStreamUseCase` + `/demo/videos` router (list/start/stop/status/mjpeg) | P1 | M | T-205 | MJPEG renders in a plain `<img>`, mirrors `/streams`' lifecycle (T-052/T-053) keyed by `video_id: str` |
+| T-207 | Wire demo video ids into `Container._build_analytics_frame_source` | P1 | S | T-206, M8 | Enabling analytics on a demo video's id runs the real pipeline; `license_plate_recognition.*` events emitted (integration test against the committed `license_plate.mp4` fixture) |
+| T-208 | Frontend Demo page (list + play + analytics toggle + LPR overlay) | P1 | M | T-206, T-207 | Operator can play a dropped-in clip and see live LPR boxes with no camera onboarded |
+| T-209 | Generalize `DetectionOverlay` to a source-agnostic `sourceId` prop, add LPR box rendering | P1 | S | T-208 | Filters on `metadata.source_id` (works for camera and demo sources alike); plate text + confidence rendered, previously not rendered for any source |
+
+---
+
 ## Epic: Camera & Event Lifecycle Management (post-M14)
 
 Not a numbered milestone — surfaced directly by the evaluator/user while trying M14's shipped UI ("can I clear events, edit a camera, delete a camera and have its recordings go with it, and where's the analytics on/off control I saw a count for") rather than planned in `IMPLEMENTATION_PLAN.md` up front. Real new backend capability, so scoped and confirmed before implementation per `AGENTS.md`. See `docs/TECHNICAL_DECISIONS.md` TD-32 for the cascade-delete design.

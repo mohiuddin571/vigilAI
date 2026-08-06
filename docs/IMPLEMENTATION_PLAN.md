@@ -358,6 +358,29 @@ Each milestone lists **Goal**, **Deliverables**, **Files** (primary ones touched
 
 ---
 
+## M17 — Demo Video Library
+
+**Goal**: Let an operator demo an analytics capability (starting with License Plate Recognition) against a pre-recorded clip, with no camera or network dependency — promoted from `TASKS.md`'s "Demo Preparation" placeholder per its own note ("promote it to an M17 entry ... don't let scope accumulate silently").
+
+**Deliverables**:
+- `IDemoVideoRepository` port + `LocalDemoVideoRepository` adapter: scans a configured directory (`storage/demo_videos/`, gitignored) for video files and resolves a filesystem-safe slug id back to a file path, never joining caller input onto a path (traversal-safe by construction, not by denylist).
+- `StartDemoStreamUseCase` + `/demo/videos` router: list/start/stop/status/MJPEG-stream one entry, keyed by the slug `video_id: str` — the same MJPEG-over-HTTP shape `/streams` already proves for cameras (T-052), reusing `StreamWorker`/`Mp4FileFrameSource` unchanged.
+- A third branch in `Container._build_analytics_frame_source`, checked before the camera-UUID fallback: a demo video's `source_id` resolves to a `Mp4FileFrameSource` over its file, then flows through the existing analytics pipeline identically to the `"mp4-demo"` fixture and real cameras — no detector plugin changes.
+- Frontend: a dedicated `/demo` page listing available clips with a Play button; playing one composes the existing `AnalyticsToggle` (already source-agnostic) and a generalized `DetectionOverlay` (fixed to filter on `metadata.source_id` rather than a camera UUID, and extended to render `license_plate_recognition.*` boxes — previously rendered by nothing at all, for any source).
+
+**Files**: `backend/app/domain/entities/demo_video.py`, `backend/app/application/ports/demo_video_repository.py`, `backend/app/infrastructure/streaming/local_demo_video_repository.py`, `backend/app/application/use_cases/{list_demo_videos,start_demo_stream}.py`, `backend/app/interfaces/api/demo_videos.py`, `backend/app/interfaces/websocket/demo_stream_status.py`, `backend/app/core/container.py`, `frontend/src/pages/DemoPage.tsx`, `frontend/src/features/demo/DemoVideoPlayer.tsx`, `frontend/src/features/analytics-console/DetectionOverlay.tsx`.
+
+**Acceptance Criteria**:
+- Dropping a video file into `storage/demo_videos/` makes it appear in `GET /demo/videos` with no restart or registration step.
+- Enabling analytics on a demo video's id emits real `DetectionEvent`s (proven directly for `license_plate_recognition.*` in `tests/integration/analytics/test_demo_video_lpr_integration.py`) — the same pipeline guarantee T-086 already protects, exercised over a third kind of source.
+- `/demo` page: pick a clip, press Play, toggle Analytics, see bounding boxes (including LPR plate text) over the video — no camera onboarded, no network video source.
+
+**Explicitly out of scope**: fetching video from YouTube or any other external/network source (considered and rejected — a `<iframe>` embed can't expose frames to the backend for real CV processing, and this repo already declines to fetch arbitrary external content unprompted, TD-20's precedent); LPR accuracy tuning against real-world footage (TD-30's fixture-only accuracy claim stands unchanged — real clips may read poorly, documented as a caveat, not silently implied to work).
+
+**Dependencies**: M2 (`Mp4FileFrameSource`), M8 (analytics pipeline foundation), M13 (the LPR plugin being demoed).
+
+---
+
 ## Addendum: Camera & Event Lifecycle Management (post-M14)
 
 Not a numbered milestone — real gaps surfaced by using M14's shipped UI (no way to edit/delete a camera, no cascading cleanup of its recordings, no way to clear analytics events, no visibility into per-camera analytics on/off state beyond an approximate dashboard count) rather than planned up front. See `docs/TASK_BACKLOG.md`'s "Camera & Event Lifecycle Management" epic (T-170–T-176) and `docs/TECHNICAL_DECISIONS.md` TD-32 for the cascade-delete design.
@@ -389,4 +412,7 @@ flowchart TD
     M12 --> M14
     M13 --> M14
     M14 --> M15 --> M16
+    M2 --> M17
+    M8 --> M17
+    M13 --> M17
 ```

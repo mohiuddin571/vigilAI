@@ -3,7 +3,8 @@ import react from '@vitejs/plugin-react'
 import type { IncomingMessage } from 'node:http'
 
 // M14 (T-140) added client-side routes at `/cameras` and `/recordings` —
-// both collide with backend path prefixes of the same name. A plain
+// both collide with backend path prefixes of the same name (M17 (T-208)'s
+// `/demo` route is the same case). A plain
 // string/target proxy entry intercepts *every* request under that prefix,
 // including the browser's top-level HTML navigation to e.g. `/cameras`,
 // which used to only ever be an XHR/fetch path before routing existed. This
@@ -29,6 +30,7 @@ export default defineConfig({
       '/cameras': apiProxy(true),
       '/streams': apiProxy(),
       '/recordings': apiProxy(true),
+      '/demo': apiProxy(true),
       '/analytics': apiProxy(),
       '/zones': apiProxy(),
       '/ws': { target: 'ws://localhost:8000', ws: true },

@@ -22,6 +22,7 @@ npm-debug.log*
 storage/recordings/
 storage/models/
 storage/db/
+storage/demo_videos/
 
 # Editors
 .vscode/
