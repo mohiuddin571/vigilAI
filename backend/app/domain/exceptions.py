@@ -56,3 +56,7 @@ class RecordingInProgressError(DomainError):
 
 class AnalyticsZoneNotFoundError(DomainError):
     """No `AnalyticsZone` exists for the given identifier."""
+
+
+class DemoVideoNotFoundError(DomainError):
+    """No demo video exists for the given id in the configured demo videos directory."""

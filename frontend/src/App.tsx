@@ -10,6 +10,7 @@ import CameraDetailPage, {
 } from './pages/CameraDetailPage';
 import CameraListPage from './pages/CameraListPage';
 import DashboardPage from './pages/DashboardPage';
+import DemoPage from './pages/DemoPage';
 import EventsPage from './pages/EventsPage';
 import LiveViewPage from './pages/LiveViewPage';
 import RecordingsPage from './pages/RecordingsPage';
@@ -44,6 +45,7 @@ function App() {
 
           <Route path="recordings" element={<RecordingsPage />} />
           <Route path="events" element={<EventsPage />} />
+          <Route path="demo" element={<DemoPage />} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

@@ -269,7 +269,7 @@ export function CameraLiveViewTab() {
           cameraId={camera.id}
           cameraName={camera.name}
           autoStart
-          overlay={analytics.enabled ? <DetectionOverlay cameraId={camera.id} /> : undefined}
+          overlay={analytics.enabled ? <DetectionOverlay sourceId={camera.id} /> : undefined}
         />
         <RecordingControl cameraId={camera.id} />
       </div>

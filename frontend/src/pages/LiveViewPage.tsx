@@ -76,7 +76,7 @@ function LiveViewSelected({
           <LiveView
             cameraId={selected.id}
             cameraName={selected.name}
-            overlay={analytics.enabled ? <DetectionOverlay cameraId={selected.id} /> : undefined}
+            overlay={analytics.enabled ? <DetectionOverlay sourceId={selected.id} /> : undefined}
           />
           <RecordingControl cameraId={selected.id} />
         </div>
