@@ -37,6 +37,7 @@ _FIXTURE_PATH = Path(__file__).resolve().parents[2] / "fixtures" / "sample.mp4"
 _HOST = "127.0.0.1"
 _APP_NAME = "live"
 _STREAM_KEY = "integration-test"
+_RESOLUTION = "320x240"
 # Real, observed latency: MediaMTX only reports a path "available" a few
 # seconds after ffmpeg opens its RTMP connection (TCP connect -> RTMP
 # handshake -> ffmpeg's own encoder startup -> first keyframe reaching the
@@ -44,8 +45,8 @@ _STREAM_KEY = "integration-test"
 # the same reconnect/backoff path used everywhere else in this codebase, not
 # a fixed "wait for the stream to exist" step) — so this budget must cover
 # several failed-then-retried open attempts, not just one.
-_CONSUMER_OPEN_TIMEOUT_MS = 3000
-_CONSUMER_READ_TIMEOUT_MS = 3000
+_CONSUMER_OPEN_TIMEOUT_SECONDS = 15.0  # RtmpFrameSource's ffmpeg probe window (10s) + margin
+_CONSUMER_READ_TIMEOUT_SECONDS = 5.0
 _STARTUP_TIMEOUT_SECONDS = 45.0
 
 
@@ -83,7 +84,7 @@ async def test_publish_then_consume_round_trip_and_recovers_after_publisher_rest
         publish_username=None,
         publish_password=None,
         video_bitrate_kbps=500,
-        resolution="320x240",
+        resolution=_RESOLUTION,
         fps=10,
     )
     rtmp_url = build_rtmp_url(_HOST, port, _APP_NAME, _STREAM_KEY, None, None)
@@ -91,8 +92,10 @@ async def test_publish_then_consume_round_trip_and_recovers_after_publisher_rest
         RtmpFrameSource,
         rtmp_url=rtmp_url,
         source_id="rtmp-demo-integration-test",
-        open_timeout_ms=_CONSUMER_OPEN_TIMEOUT_MS,
-        read_timeout_ms=_CONSUMER_READ_TIMEOUT_MS,
+        ffmpeg_binary_path="ffmpeg",
+        resolution=_RESOLUTION,
+        open_timeout_seconds=_CONSUMER_OPEN_TIMEOUT_SECONDS,
+        read_timeout_seconds=_CONSUMER_READ_TIMEOUT_SECONDS,
     )
     consumer = StreamWorker(
         frame_source_factory=consumer_factory,

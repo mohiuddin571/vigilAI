@@ -132,11 +132,14 @@ class Settings(BaseSettings):
     rtmp_publish_video_bitrate_kbps: int = 2000
     rtmp_publish_resolution: str = "1280x720"
     rtmp_publish_fps: int = 25
-    # RTMP consume decode (Consumer side): same open/read-timeout-before-
-    # treating-as-a-failed-connection-attempt purpose as rtsp_open_timeout_ms/
-    # rtsp_read_timeout_ms above, kept separate since the two sources aren't
-    # required to share a value.
-    rtmp_open_timeout_ms: int = 5000
+    # RTMP consume decode (Consumer side, `RtmpFrameSource`): same open/read-
+    # timeout-before-treating-as-a-failed-connection-attempt purpose as
+    # rtsp_open_timeout_ms/rtsp_read_timeout_ms above, kept separate since
+    # the two sources aren't required to share a value. `rtmp_open_timeout_ms`
+    # is higher than the RTSP equivalent to comfortably cover
+    # RtmpFrameSource's wider ffmpeg probe window (10s analyzeduration) —
+    # see that module's docstring.
+    rtmp_open_timeout_ms: int = 12000
     rtmp_read_timeout_ms: int = 5000
     # Generated mediamtx.yml (and nothing else) lives here — gitignored, like
     # storage/recordings/ and storage/demo_videos/ above.
