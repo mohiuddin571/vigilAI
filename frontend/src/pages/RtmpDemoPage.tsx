@@ -1,4 +1,3 @@
-import Panel from '../components/Panel';
 import ConsumerPanel from '../features/rtmp-demo/ConsumerPanel';
 import PublisherPanel from '../features/rtmp-demo/PublisherPanel';
 import RtmpVideoPlayer from '../features/rtmp-demo/RtmpVideoPlayer';
@@ -31,10 +30,12 @@ function RtmpDemoPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
-      <Panel
-        title="RTMP Push/Consume Demo"
-        description="Video File → ffmpeg RTMP PUSH → MediaMTX RTMP Server → RTMP CONSUME → Player."
-      />
+      <div>
+        <h1 className="text-lg font-semibold text-slate-900">RTMP Push/Consume Demo</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Video File → ffmpeg RTMP PUSH → MediaMTX RTMP Server → RTMP CONSUME → Player.
+        </p>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <PublisherPanel
