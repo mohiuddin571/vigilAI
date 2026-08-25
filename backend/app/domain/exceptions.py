@@ -60,3 +60,12 @@ class AnalyticsZoneNotFoundError(DomainError):
 
 class DemoVideoNotFoundError(DomainError):
     """No demo video exists for the given id in the configured demo videos directory."""
+
+
+class RtmpServerUnavailableError(DomainError):
+    """The RTMP demo server (MediaMTX) could not be started, or refused a publish/read
+    connection (e.g. not running, or an auth check failed)."""
+
+
+class RtmpPublisherError(DomainError):
+    """The RTMP demo publisher (ffmpeg) could not be started, or exited unexpectedly."""

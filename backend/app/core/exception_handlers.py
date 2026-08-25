@@ -15,6 +15,8 @@ from app.domain.exceptions import (
     RecordingInProgressError,
     RecordingNotFoundError,
     RecordingNotInProgressError,
+    RtmpPublisherError,
+    RtmpServerUnavailableError,
     UnsupportedConfigurationError,
 )
 
@@ -37,6 +39,8 @@ _STATUS_BY_EXCEPTION: dict[type[DomainError], int] = {
     RecordingNotFoundError: status.HTTP_404_NOT_FOUND,
     AnalyticsZoneNotFoundError: status.HTTP_404_NOT_FOUND,
     DemoVideoNotFoundError: status.HTTP_404_NOT_FOUND,
+    RtmpServerUnavailableError: status.HTTP_503_SERVICE_UNAVAILABLE,
+    RtmpPublisherError: status.HTTP_400_BAD_REQUEST,
     DomainError: status.HTTP_400_BAD_REQUEST,
 }
 

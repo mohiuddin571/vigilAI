@@ -14,6 +14,7 @@ import DemoPage from './pages/DemoPage';
 import EventsPage from './pages/EventsPage';
 import LiveViewPage from './pages/LiveViewPage';
 import RecordingsPage from './pages/RecordingsPage';
+import RtmpDemoPage from './pages/RtmpDemoPage';
 
 // Routing shell (T-140) per docs/UI_UX_DESIGN.md §3's sitemap. Declarative
 // mode (`<BrowserRouter>`/`<Routes>`), not the data router — data fetching
@@ -46,6 +47,7 @@ function App() {
           <Route path="recordings" element={<RecordingsPage />} />
           <Route path="events" element={<EventsPage />} />
           <Route path="demo" element={<DemoPage />} />
+          <Route path="rtmp-demo" element={<RtmpDemoPage />} />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
