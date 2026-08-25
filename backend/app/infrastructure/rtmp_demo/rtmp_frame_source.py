@@ -1,108 +1,191 @@
 import asyncio
+import contextlib
 from collections.abc import AsyncIterator
-from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
-import cv2
+import numpy as np
+import structlog
 
 from app.application.ports.frame_source import IFrameSource
 from app.domain.entities.frame import Frame
 from app.domain.exceptions import FrameSourceUnavailableError
 
+logger = structlog.get_logger(__name__)
 
-def _open_capture(url: str, open_timeout_ms: int, read_timeout_ms: int) -> cv2.VideoCapture:
-    """Open an RTMP URL via OpenCV's bundled FFmpeg backend — the same `cv2.VideoCapture`/FFmpeg
-    decode path `RawRtspFrameSource`/`Mp4FileFrameSource` use (docs/ARCHITECTURE.md §5), just
-    pointed at `rtmp://` instead of `rtsp://`/a local file. No RTSP-transport env var here — that
-    FFmpeg option is RTSP-specific and doesn't apply to RTMP."""
-    return cv2.VideoCapture(
-        url,
-        cv2.CAP_FFMPEG,
-        [
-            cv2.CAP_PROP_OPEN_TIMEOUT_MSEC,
-            open_timeout_ms,
-            cv2.CAP_PROP_READ_TIMEOUT_MSEC,
-            read_timeout_ms,
-        ],
-    )
+_BYTES_PER_PIXEL = 3  # bgr24, matching every other Frame.image in this codebase (cv2 default)
+_TERMINATE_TIMEOUT_SECONDS = 5.0
+_KILL_TIMEOUT_SECONDS = 3.0
+
+
+def _parse_resolution(resolution: str) -> tuple[int, int]:
+    width_str, _, height_str = resolution.partition("x")
+    return int(width_str), int(height_str)
 
 
 class RtmpFrameSource(IFrameSource):
-    """Connects to the RTMP demo server's RTMP URL and decodes frames from it (docs/RTMP_DEMO.md).
+    """Connects to the RTMP demo server via a system `ffmpeg` subprocess piping raw frames on
+    its stdout, rather than `cv2.VideoCapture`'s bundled FFmpeg (docs/RTMP_DEMO.md,
+    docs/TECHNICAL_DECISIONS.md TD-33's "observed caveat").
 
-    A trimmed sibling of `RawRtspFrameSource`
-    (`infrastructure/streaming/rtsp_frame_source.py`) — same dedicated
-    single-worker `ThreadPoolExecutor` per instance, for the same reason
-    documented there: `cv2.VideoCapture`'s bundled FFmpeg backend isn't safe
-    for a `release()` to race a still-in-flight `read()` from a different OS
-    thread. Wrapped by the existing `StreamWorker` unchanged (multiprocessing
-    isolation + `ReconnectSupervisor` backoff/retry) exactly like every other
-    `IFrameSource` — this is what makes the RTMP Consumer reconnect when the
-    publisher hasn't started yet or drops mid-stream (request scenarios
-    #5/#6/#7/#8), with no new reconnect logic in this module.
+    `opencv-python-headless` bundles an older FFmpeg build (avformat 61.x)
+    than the system `ffmpeg` this project already requires for recording
+    (TD-22, `ffmpeg_binary_path`) — its RTMP demuxer was observed
+    periodically losing chunk-stream sync against MediaMTX
+    (`RTMP packet size mismatch`, `frame stream ended unexpectedly`,
+    recurring every few seconds), which the newer system `ffmpeg` binary
+    consuming the identical stream did not exhibit in the same manual
+    testing. This class trades `cv2.VideoCapture`'s convenience for that
+    reliability: `ffmpeg -i <rtmp_url> -f rawvideo -pix_fmt bgr24 pipe:1`,
+    parsed as fixed-size chunks — fixed-size only works because both ends of
+    this demo's RTMP pipeline agree on resolution via the same
+    `Settings.rtmp_publish_resolution` value the publisher encodes at
+    (`FfmpegRtmpPublisher`), so this consumer's `-s` output option always
+    matches what's actually arriving and every frame is exactly
+    `width * height * 3` bytes.
+
+    `start()` blocks until the *first* frame is actually read (bounded by
+    `open_timeout_seconds`) before returning — the same "confirmed open, not
+    just spawned" guarantee `cv2.VideoCapture.isOpened()` gives every other
+    `IFrameSource` in this codebase, so `ReconnectSupervisor`'s "state
+    becomes CONNECTED right after `start()` succeeds" assumption
+    (`reconnect_supervisor.py`) still holds. Every subsequent read in
+    `frames()` is bounded by `read_timeout_seconds`, so a stalled (not
+    exited) subprocess is detected and reconnected the same way a dead one
+    is, not left blocking forever.
 
     Never logs `rtmp_url`: it may embed read credentials (TD-15/AGENTS.md).
+    ffmpeg's stderr is discarded entirely (`DEVNULL`), same as
+    `FfmpegRecordingWorker`/`FfmpegRtmpPublisher` — it can echo the URL in
+    its own diagnostic output.
     """
 
     def __init__(
         self,
         rtmp_url: str,
         source_id: str,
+        ffmpeg_binary_path: str,
+        resolution: str,
         *,
-        open_timeout_ms: int = 5000,
-        read_timeout_ms: int = 5000,
+        open_timeout_seconds: float = 5.0,
+        read_timeout_seconds: float = 5.0,
     ) -> None:
         self._rtmp_url = rtmp_url
         self._source_id = source_id
-        self._open_timeout_ms = open_timeout_ms
-        self._read_timeout_ms = read_timeout_ms
-        self._cap: cv2.VideoCapture | None = None
-        self._executor: ThreadPoolExecutor | None = None
+        self._ffmpeg_binary_path = ffmpeg_binary_path
+        self._width, self._height = _parse_resolution(resolution)
+        self._frame_size = self._width * self._height * _BYTES_PER_PIXEL
+        self._open_timeout_seconds = open_timeout_seconds
+        self._read_timeout_seconds = read_timeout_seconds
+        self._process: asyncio.subprocess.Process | None = None
+        self._first_frame: bytes | None = None
 
     @property
     def source_id(self) -> str:
         return self._source_id
 
     async def start(self) -> None:
-        executor = ThreadPoolExecutor(max_workers=1)
-        loop = asyncio.get_running_loop()
-        cap = await loop.run_in_executor(
-            executor, _open_capture, self._rtmp_url, self._open_timeout_ms, self._read_timeout_ms
-        )
-        if not cap.isOpened():
-            await loop.run_in_executor(executor, cap.release)
-            await asyncio.to_thread(executor.shutdown)
+        argv = [
+            self._ffmpeg_binary_path,
+            "-loglevel",
+            "error",
+            # MediaMTX's RTMP output was observed failing ffmpeg's *default*
+            # probe window ("could not find codec parameters", the input
+            # closing before a single frame arrived) even though the same
+            # stream opens fine once given more time to analyze — MediaMTX's
+            # own timestamp handling logs "Negative cts, previous timestamps
+            # might be wrong" against this project's publisher, which is
+            # consistent with needing a wider probe. 10s/10MB comfortably
+            # covers that in testing without materially slowing a normal
+            # open (probing ends as soon as enough packets are seen, not
+            # after the full duration).
+            "-analyzeduration",
+            "10000000",
+            "-probesize",
+            "10000000",
+            "-i",
+            self._rtmp_url,
+            "-an",
+            "-f",
+            "rawvideo",
+            "-pix_fmt",
+            "bgr24",
+            "-s",
+            f"{self._width}x{self._height}",
+            "pipe:1",
+        ]
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *argv,
+                stdin=asyncio.subprocess.DEVNULL,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.DEVNULL,
+                limit=self._frame_size + 1,
+            )
+        except OSError as exc:
+            raise FrameSourceUnavailableError(
+                f"Could not start ffmpeg RTMP consumer for source {self._source_id!r}"
+            ) from exc
+
+        assert process.stdout is not None
+        try:
+            first_frame = await asyncio.wait_for(
+                process.stdout.readexactly(self._frame_size), timeout=self._open_timeout_seconds
+            )
+        except (TimeoutError, asyncio.IncompleteReadError) as exc:
+            await self._terminate(process)
             raise FrameSourceUnavailableError(
                 f"Could not open RTMP stream for source {self._source_id!r}"
-            )
-        self._cap = cap
-        self._executor = executor
+            ) from exc
+
+        self._process = process
+        self._first_frame = first_frame
 
     async def stop(self) -> None:
-        if self._cap is not None and self._executor is not None:
-            loop = asyncio.get_running_loop()
-            await loop.run_in_executor(self._executor, self._cap.release)
-            self._cap = None
-        if self._executor is not None:
-            executor = self._executor
-            self._executor = None
-            await asyncio.to_thread(executor.shutdown)
+        process = self._process
+        self._process = None
+        self._first_frame = None
+        if process is not None:
+            await self._terminate(process)
 
     async def frames(self) -> AsyncIterator[Frame]:
-        if self._cap is None or self._executor is None:
+        process = self._process
+        if process is None or self._first_frame is None:
             raise FrameSourceUnavailableError("start() must succeed before frames() is iterated")
-        cap = self._cap
-        executor = self._executor
-        loop = asyncio.get_running_loop()
+        assert process.stdout is not None
+
         sequence = 0
-        while True:
-            ok, image = await loop.run_in_executor(executor, cap.read)
-            if not ok:
-                return
+        raw: bytes | None = self._first_frame
+        self._first_frame = None
+        while raw is not None:
             yield Frame(
                 source_id=self._source_id,
                 sequence=sequence,
                 timestamp=datetime.now(UTC),
-                image=image,
+                image=np.frombuffer(raw, dtype=np.uint8)
+                .reshape((self._height, self._width, _BYTES_PER_PIXEL))
+                .copy(),
             )
             sequence += 1
+            try:
+                raw = await asyncio.wait_for(
+                    process.stdout.readexactly(self._frame_size),
+                    timeout=self._read_timeout_seconds,
+                )
+            except asyncio.IncompleteReadError:
+                return
+            except TimeoutError as exc:
+                raise FrameSourceUnavailableError(
+                    f"RTMP consumer for source {self._source_id!r} stalled — "
+                    f"no frame within {self._read_timeout_seconds}s"
+                ) from exc
+
+    async def _terminate(self, process: asyncio.subprocess.Process) -> None:
+        if process.returncode is None:
+            process.terminate()
+            try:
+                await asyncio.wait_for(process.wait(), timeout=_TERMINATE_TIMEOUT_SECONDS)
+            except TimeoutError:
+                logger.warning("rtmp_demo.consumer_force_kill", pid=process.pid)
+                process.kill()
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(process.wait(), timeout=_KILL_TIMEOUT_SECONDS)

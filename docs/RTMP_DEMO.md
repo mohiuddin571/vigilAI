@@ -18,7 +18,7 @@ MediaMTX  (rtmp://localhost:1935/live/demo-camera)
    |
    | RTMP CONSUME
    v
-RtmpFrameSource (cv2.VideoCapture, via StreamWorker + ReconnectSupervisor)
+RtmpFrameSource (ffmpeg subprocess, via StreamWorker + ReconnectSupervisor)
    |
    v
 MJPEG-over-HTTP  (/rtmp-demo/consumer/mjpeg)
@@ -46,7 +46,7 @@ The displayed video is never the original MP4 loaded directly — it is decoded 
 | **RTMP Publisher** | The client pushing a stream *to* an RTMP server. Here: `ffmpeg -re -stream_loop -1 -i <file> ... -f flv rtmp://.../live/demo-camera` — reads the MP4 in real time (`-re`), loops it (`-stream_loop -1`) to simulate a continuous camera, re-encodes to H.264 (`libx264`), and pushes as an FLV-muxed RTMP stream. |
 | **RTMP Server** | The process that accepts a publisher's incoming stream (ingest) and makes it available to consumers (serving). Here: [MediaMTX](https://github.com/bluenviron/mediamtx), a single Go binary. |
 | **RTMP Ingest** | The server-side act of *receiving* a publisher's stream — the "push" endpoint. |
-| **RTMP Consumer** | The client pulling the stream *from* the RTMP server. Here: `RtmpFrameSource`, decoding via `cv2.VideoCapture`'s bundled FFmpeg backend — the exact pattern `RawRtspFrameSource` already uses for RTSP, pointed at an `rtmp://` URL instead. |
+| **RTMP Consumer** | The client pulling the stream *from* the RTMP server. Here: `RtmpFrameSource`, decoding via a system `ffmpeg` subprocess piping raw frames on its stdout — not `cv2.VideoCapture` (the pattern `RawRtspFrameSource` uses for RTSP), which turned out not to be reliable enough for RTMP specifically; see [Reconnection behavior](#reconnection-behavior) and TD-33. |
 | **Stream Key** | The path segment identifying *which* stream on the server (`demo-camera` by default) — analogous to a "channel name." Combined with the **Application** name (`live` by default) to form the full path `live/demo-camera`. |
 | **Authentication** | Enforced entirely by MediaMTX (`authInternalUsers`, checked on publish and on read/play), never by application code — see [Authentication](#authentication) below. |
 | **RTMP URL** | `rtmp://[user:pass@]host:port/app/stream_key` — e.g. `rtmp://localhost:1935/live/demo-camera`. The publisher and consumer both derive this from the same `Settings` fields, via `build_rtmp_url()` (`ffmpeg_publisher.py`). |
@@ -85,7 +85,7 @@ All in `backend/app/core/config.py`'s `Settings` (env var names in `.env.example
 | `rtmp_publish_video_bitrate_kbps` | `2000` | Publisher encode bitrate. |
 | `rtmp_publish_resolution` | `1280x720` | Publisher encode resolution. |
 | `rtmp_publish_fps` | `25` | Publisher encode frame rate. |
-| `rtmp_open_timeout_ms` / `rtmp_read_timeout_ms` | `5000` / `5000` | Consumer's `cv2.VideoCapture` connect/read timeouts. |
+| `rtmp_open_timeout_ms` / `rtmp_read_timeout_ms` | `12000` / `5000` | Consumer's first-frame-confirmation and per-frame stall timeouts (see [Reconnection behavior](#reconnection-behavior)). |
 | `rtmp_demo_runtime_dir` | `storage/rtmp_demo/` (gitignored) | Where the generated `mediamtx.yml` is written. |
 
 ---
@@ -134,7 +134,7 @@ This exact flow (steps 6–12) is what `backend/tests/integration/rtmp_demo/test
 
 The Consumer's `RtmpFrameSource` is wrapped by the same `StreamWorker`/`ReconnectSupervisor` every other video source in this codebase uses (`stream_worker_reconnect_backoff_seconds` in `Settings`, default `[1, 2, 4, 8, 16, 30]`, capped rather than exhausted-and-give-up) — no new reconnect logic was written for this demo. This is what makes starting the Consumer before the Publisher, or after it stops, self-heal automatically once a stream becomes available, rather than requiring a manual retry.
 
-**A known, honestly-documented caveat** (see TD-33 for the full writeup): `opencv-python-headless`'s bundled FFmpeg is older than this machine's system `ffmpeg`, and its RTMP demuxer occasionally loses sync with MediaMTX a few seconds into a session (`RTMP packet size mismatch` / `frame stream ended unexpectedly` in the backend log) — an interop quirk in the decode library, not a bug in this demo's logic. The same reconnect path above recovers within its backoff schedule every time this was observed in testing, so in practice the Consumer panel may briefly show `Reconnecting…` periodically during a long-running session. A longer source clip (`car-2.mp4`/`human.mp4` over the 6-second `car-1.mp4`) reduces how often this is visible, since it also reduces how often the Publisher's own `-stream_loop` restart adds a second, independent momentary discontinuity.
+**History** (see TD-33 for the full writeup): the Consumer originally decoded via `cv2.VideoCapture` (`RawRtspFrameSource`'s pattern). In practice, `opencv-python-headless`'s bundled FFmpeg — older than this machine's system `ffmpeg` — periodically lost sync with MediaMTX a few seconds into a session (`RTMP packet size mismatch` / `frame stream ended unexpectedly`), causing frequent, continuous reconnect cycling (each failed attempt costing several seconds of frozen video) rather than an occasional blip. Switching the Consumer to a system-`ffmpeg` subprocess (piping raw frames, this module's current implementation) resolved it: the real bug was ffmpeg's *default* probe window being too short for MediaMTX's RTMP output ("could not find codec parameters" on the very first connection) — `RtmpFrameSource` now passes explicit `-analyzeduration`/`-probesize` values wide enough to cover that, confirmed stable in repeated testing. `rtmp_open_timeout_ms` (default `12000`) is sized to comfortably cover that wider probe window without falsely timing out a normal connection.
 
 ---
 

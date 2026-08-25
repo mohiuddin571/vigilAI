@@ -502,8 +502,10 @@ class Container:
             RtmpFrameSource,
             rtmp_url=rtmp_url,
             source_id="rtmp-demo-consumer",
-            open_timeout_ms=self._settings.rtmp_open_timeout_ms,
-            read_timeout_ms=self._settings.rtmp_read_timeout_ms,
+            ffmpeg_binary_path=self._settings.ffmpeg_binary_path,
+            resolution=self._settings.rtmp_publish_resolution,
+            open_timeout_seconds=self._settings.rtmp_open_timeout_ms / 1000,
+            read_timeout_seconds=self._settings.rtmp_read_timeout_ms / 1000,
         )
         return StreamWorker(
             frame_source_factory=frame_source_factory,
