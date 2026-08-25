@@ -31,6 +31,8 @@ Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./
 - [x] License Plate Recognition / OCR (M13)
 - [x] Frontend Integration — unified dashboard (M14)
 - [x] Camera & Event Lifecycle Management — edit/delete camera (cascade), delete recording, clear events, per-camera analytics visibility (post-M14 addendum, T-170–T-176). Backend unit-tested (`backend/tests/unit/application/test_{update_camera,delete_camera,delete_recording,clear_detection_events}.py`); manual end-to-end verification against the running system was not completed this session (dev backend became unresponsive mid-session) — do this before considering it demo-ready.
+- [x] Demo Video Library — play a pre-recorded clip with no camera, demo License Plate Recognition against it (M17, T-205–T-209)
+- [x] RTMP Push/Consume Demo — not part of the graded milestone sequence (see `docs/IMPLEMENTATION_PLAN.md`'s "Addendum: RTMP Push/Consume Demo"); full writeup in `docs/RTMP_DEMO.md`.
 
 # In Progress
 
@@ -40,7 +42,6 @@ Quick-glance status only. This is an index into [docs/IMPLEMENTATION_PLAN.md](./
 
 - [ ] Testing, Hardening & Final Documentation Polish (M15)
 - [ ] Docker (M16, stretch — time-permitting, explicitly last)
-- [ ] Demo Video Library — play a pre-recorded clip with no camera, demo License Plate Recognition against it (M17, T-205–T-209)
 
 ---
 

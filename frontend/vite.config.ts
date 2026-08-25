@@ -31,6 +31,7 @@ export default defineConfig({
       '/streams': apiProxy(),
       '/recordings': apiProxy(true),
       '/demo': apiProxy(true),
+      '/rtmp-demo': apiProxy(true),
       '/analytics': apiProxy(),
       '/zones': apiProxy(),
       '/ws': { target: 'ws://localhost:8000', ws: true },

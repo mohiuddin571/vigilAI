@@ -36,6 +36,8 @@ from app.application.ports.frame_source import IFrameSource
 from app.application.ports.recording_file_store import IRecordingFileStore
 from app.application.ports.recording_repository import IRecordingRepository
 from app.application.ports.recording_worker import IRecordingWorker
+from app.application.ports.rtmp_publisher import IRtmpPublisher
+from app.application.ports.rtmp_server_controller import IRtmpServerController
 from app.application.use_cases.analytics_session_registry import AnalyticsSessionRegistry
 from app.application.use_cases.clear_detection_events import ClearDetectionEventsUseCase
 from app.application.use_cases.create_zone import CreateZoneUseCase
@@ -52,12 +54,15 @@ from app.application.use_cases.list_demo_videos import ListDemoVideosUseCase
 from app.application.use_cases.list_detection_events import ListDetectionEventsUseCase
 from app.application.use_cases.list_recordings import ListRecordingsUseCase
 from app.application.use_cases.list_zones_by_camera import ListZonesByCameraUseCase
+from app.application.use_cases.manage_rtmp_publisher import ManageRtmpPublisherUseCase
+from app.application.use_cases.manage_rtmp_server import ManageRtmpServerUseCase
 from app.application.use_cases.onboard_camera import OnboardCameraUseCase
 from app.application.use_cases.recording_session_registry import RecordingSessionRegistry
 from app.application.use_cases.run_analytics_pipeline import RunAnalyticsPipelineUseCase
 from app.application.use_cases.start_demo_stream import StartDemoStreamUseCase
 from app.application.use_cases.start_live_stream import StartLiveStreamUseCase
 from app.application.use_cases.start_recording import StartRecordingUseCase
+from app.application.use_cases.start_rtmp_consumer import StartRtmpConsumerUseCase
 from app.application.use_cases.stop_recording import StopRecordingUseCase
 from app.application.use_cases.update_camera import UpdateCameraUseCase
 from app.application.use_cases.update_camera_analytics_settings import (
@@ -85,6 +90,9 @@ from app.infrastructure.persistence.database import build_engine, build_session_
 from app.infrastructure.persistence.event_repository import SqlEventRepository
 from app.infrastructure.persistence.recording_repository import SqlRecordingRepository
 from app.infrastructure.persistence.sql_camera_repository import SqlCameraRepository
+from app.infrastructure.rtmp_demo.ffmpeg_publisher import FfmpegRtmpPublisher, build_rtmp_url
+from app.infrastructure.rtmp_demo.mediamtx_server import MediaMtxServerController
+from app.infrastructure.rtmp_demo.rtmp_frame_source import RtmpFrameSource
 from app.infrastructure.security.credential_cipher import CredentialCipher
 from app.infrastructure.streaming.local_demo_video_repository import LocalDemoVideoRepository
 from app.infrastructure.streaming.local_recording_file_store import LocalRecordingFileStore
@@ -204,6 +212,42 @@ class Container:
             demo_video_repository=self._demo_video_repository,
             build_stream_worker=self._build_demo_stream_worker,
         )
+        # RTMP Push/Consume Demo (docs/RTMP_DEMO.md) — isolated, outside the
+        # graded milestone sequence. Three independent lifecycles (server,
+        # publisher, consumer), each a shared singleton for the same reason
+        # `_start_live_stream_use_case`/`_start_demo_stream_use_case` are:
+        # they hold a running subprocess/Stream Worker across requests.
+        self._rtmp_server_controller: IRtmpServerController = MediaMtxServerController(
+            settings.mediamtx_binary_path,
+            settings.rtmp_demo_runtime_dir,
+            host=settings.rtmp_server_host,
+            port=settings.rtmp_server_port,
+            app_name=settings.rtmp_app_name,
+            stream_key=settings.rtmp_stream_key,
+            publish_username=settings.rtmp_publish_username,
+            publish_password=settings.rtmp_publish_password,
+            read_username=settings.rtmp_read_username,
+            read_password=settings.rtmp_read_password,
+        )
+        self._manage_rtmp_server_use_case = ManageRtmpServerUseCase(self._rtmp_server_controller)
+        self._rtmp_publisher: IRtmpPublisher = FfmpegRtmpPublisher(
+            settings.ffmpeg_binary_path,
+            host=settings.rtmp_server_host,
+            port=settings.rtmp_server_port,
+            app_name=settings.rtmp_app_name,
+            stream_key=settings.rtmp_stream_key,
+            publish_username=settings.rtmp_publish_username,
+            publish_password=settings.rtmp_publish_password,
+            video_bitrate_kbps=settings.rtmp_publish_video_bitrate_kbps,
+            resolution=settings.rtmp_publish_resolution,
+            fps=settings.rtmp_publish_fps,
+        )
+        self._manage_rtmp_publisher_use_case = ManageRtmpPublisherUseCase(
+            self._rtmp_publisher, self._demo_video_repository
+        )
+        self._start_rtmp_consumer_use_case = StartRtmpConsumerUseCase(
+            build_stream_worker=self._build_rtmp_consumer_stream_worker
+        )
         self._recording_session_registry = RecordingSessionRegistry()
         self._start_recording_use_case = StartRecordingUseCase(
             camera_gateway_factory=self.build_camera_gateway,
@@ -241,6 +285,11 @@ class Container:
         await self._debug_stream_use_case.stop()
         await self._start_live_stream_use_case.stop_all()
         await self._start_demo_stream_use_case.stop_all()
+        # Consumer, then publisher, then server — release the RTMP demo's
+        # subprocesses in the reverse order they'd naturally be started in.
+        await self._start_rtmp_consumer_use_case.stop_all()
+        await self._manage_rtmp_publisher_use_case.stop()
+        await self._manage_rtmp_server_use_case.stop()
         stop_recording = self.build_stop_recording_use_case()
         for camera_id in self._recording_session_registry.active_camera_ids():
             try:
@@ -422,6 +471,51 @@ class Container:
         same reason as `build_start_live_stream_use_case`: it holds a registry of
         running demo Stream Workers across requests."""
         return self._start_demo_stream_use_case
+
+    def build_manage_rtmp_server_use_case(self) -> ManageRtmpServerUseCase:
+        """Returns the single shared `ManageRtmpServerUseCase` instance (docs/RTMP_DEMO.md), for
+        the same reason as `build_start_live_stream_use_case`: it holds the running MediaMTX
+        subprocess across requests."""
+        return self._manage_rtmp_server_use_case
+
+    def build_manage_rtmp_publisher_use_case(self) -> ManageRtmpPublisherUseCase:
+        """Returns the single shared `ManageRtmpPublisherUseCase` instance (docs/RTMP_DEMO.md),
+        for the same reason as `build_manage_rtmp_server_use_case`: it holds the running ffmpeg
+        publisher subprocess across requests."""
+        return self._manage_rtmp_publisher_use_case
+
+    def _build_rtmp_consumer_stream_worker(self) -> StreamWorker:
+        # Same `functools.partial`-over-a-module-level-class shape as
+        # `_build_demo_stream_worker` (picklable plain str/int args only, for
+        # the `multiprocessing` spawn boundary `StreamWorker` uses). The
+        # consumer always reads with the *read* credentials (if configured),
+        # independent of whichever publish credentials the publisher used.
+        rtmp_url = build_rtmp_url(
+            self._settings.rtmp_server_host,
+            self._settings.rtmp_server_port,
+            self._settings.rtmp_app_name,
+            self._settings.rtmp_stream_key,
+            self._settings.rtmp_read_username,
+            self._settings.rtmp_read_password,
+        )
+        frame_source_factory = functools.partial(
+            RtmpFrameSource,
+            rtmp_url=rtmp_url,
+            source_id="rtmp-demo-consumer",
+            open_timeout_ms=self._settings.rtmp_open_timeout_ms,
+            read_timeout_ms=self._settings.rtmp_read_timeout_ms,
+        )
+        return StreamWorker(
+            frame_source_factory=frame_source_factory,
+            backoff_schedule=self._settings.stream_worker_reconnect_backoff_seconds,
+            frame_queue_max_size=self._settings.stream_worker_frame_queue_max_size,
+        )
+
+    def build_start_rtmp_consumer_use_case(self) -> StartRtmpConsumerUseCase:
+        """Returns the single shared `StartRtmpConsumerUseCase` instance (docs/RTMP_DEMO.md), for
+        the same reason as `build_manage_rtmp_server_use_case`: it holds the running consumer
+        Stream Worker across requests."""
+        return self._start_rtmp_consumer_use_case
 
     def build_debug_stream_use_case(self) -> DebugStreamUseCase:
         """Returns the single shared `DebugStreamUseCase` instance (T-025).

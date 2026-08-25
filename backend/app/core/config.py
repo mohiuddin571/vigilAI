@@ -105,5 +105,42 @@ class Settings(BaseSettings):
     # camera. Scanned directly from disk, no DB table (docs/FOLDER_STRUCTURE.md).
     demo_videos_dir: Path = _REPO_ROOT / "storage" / "demo_videos"
 
+    # RTMP Push/Consume Demo (docs/RTMP_DEMO.md; docs/TECHNICAL_DECISIONS.md
+    # TD-33). Outside the graded milestone sequence — an isolated demo page
+    # proving Video File -> ffmpeg RTMP Publisher -> MediaMTX RTMP Server ->
+    # RTMP Consumer -> Player, since there is no physical RTMP camera.
+    # `mediamtx_binary_path` mirrors `ffmpeg_binary_path`/`ffprobe_binary_path`
+    # above: a configured binary name/path, never resolved via os.environ
+    # outside this file.
+    mediamtx_binary_path: str = "mediamtx"
+    rtmp_server_host: str = "localhost"
+    rtmp_server_port: int = 1935
+    rtmp_app_name: str = "live"
+    rtmp_stream_key: str = "demo-camera"
+    # None/empty (either half unset) = auth disabled — the intentionally
+    # simplified local-demo default documented in docs/RTMP_DEMO.md. Setting
+    # both halves of a pair enables MediaMTX's built-in per-action
+    # `authInternalUsers` check for that action.
+    rtmp_publish_username: str | None = None
+    rtmp_publish_password: str | None = None
+    rtmp_read_username: str | None = None
+    rtmp_read_password: str | None = None
+    # Publisher (ffmpeg) encode target — also what the Consumer UI reports as
+    # the stream's "configured" (not independently measured) codec/bitrate,
+    # since cv2.VideoCapture's FFmpeg backend doesn't reliably expose true
+    # codec/bitrate for a network source (see start_rtmp_consumer.py).
+    rtmp_publish_video_bitrate_kbps: int = 2000
+    rtmp_publish_resolution: str = "1280x720"
+    rtmp_publish_fps: int = 25
+    # RTMP consume decode (Consumer side): same open/read-timeout-before-
+    # treating-as-a-failed-connection-attempt purpose as rtsp_open_timeout_ms/
+    # rtsp_read_timeout_ms above, kept separate since the two sources aren't
+    # required to share a value.
+    rtmp_open_timeout_ms: int = 5000
+    rtmp_read_timeout_ms: int = 5000
+    # Generated mediamtx.yml (and nothing else) lives here — gitignored, like
+    # storage/recordings/ and storage/demo_videos/ above.
+    rtmp_demo_runtime_dir: Path = _REPO_ROOT / "storage" / "rtmp_demo"
+
 
 settings = Settings()  # type: ignore[call-arg]

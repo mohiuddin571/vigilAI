@@ -23,6 +23,7 @@ storage/recordings/
 storage/models/
 storage/db/
 storage/demo_videos/
+storage/rtmp_demo/
 
 # Editors
 .vscode/
